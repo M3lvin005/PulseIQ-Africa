@@ -1,0 +1,159 @@
+"""PDF report generation for PulseIQ Africa."""
+
+from __future__ import annotations
+
+from io import BytesIO
+from xml.sax.saxutils import escape
+
+import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+from .analytics import format_currency
+
+
+def _p(text: object, style: ParagraphStyle) -> Paragraph:
+    return Paragraph(escape(str(text)), style)
+
+
+def build_report_pdf(
+    df: pd.DataFrame,
+    kpis: dict[str, float | int | str],
+    anomaly_df: pd.DataFrame,
+    insights: list[str],
+    model_name: str | None = None,
+    model_metrics: dict[str, float] | None = None,
+) -> bytes:
+    """Build a downloadable PDF report from the current dashboard state."""
+
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.62 * inch,
+        leftMargin=0.62 * inch,
+        topMargin=0.58 * inch,
+        bottomMargin=0.58 * inch,
+        title="PulseIQ Business Intelligence Report",
+    )
+
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(
+        "PulseTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor("#102033"),
+        spaceAfter=10,
+    )
+    h2 = ParagraphStyle(
+        "PulseHeading",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor("#0D5C63"),
+        spaceBefore=12,
+        spaceAfter=6,
+    )
+    body = ParagraphStyle("PulseBody", parent=styles["BodyText"], fontSize=9.5, leading=13, textColor=colors.HexColor("#182B3A"))
+    small = ParagraphStyle("PulseSmall", parent=body, fontSize=8.5, leading=11)
+
+    story: list[object] = []
+    story.append(_p("PulseIQ Business Intelligence Report", title))
+    story.append(_p("Automated decision summary for SME, fintech, and portfolio review workflows.", body))
+    story.append(Spacer(1, 0.12 * inch))
+
+    summary_rows = [
+        ["Metric", "Value"],
+        ["Records processed", f"{int(kpis.get('records_processed', 0)):,}"],
+        ["Total transaction value", format_currency(float(kpis.get("total_revenue", 0)))],
+        ["Average transaction value", format_currency(float(kpis.get("average_transaction_value", 0)))],
+        ["Loan repayment rate", f"{float(kpis.get('loan_repayment_rate', 0)):.1f}%"],
+        ["Data quality score", f"{float(kpis.get('data_quality_score', 0)):.1f}%"],
+        ["Suspicious records", f"{int(kpis.get('suspicious_transactions', 0)):,}"],
+        ["High-risk customers", f"{int(kpis.get('high_risk_customers', 0)):,}"],
+    ]
+    story.append(_p("Dataset Summary", h2))
+    story.append(_table(summary_rows, widths=[2.4 * inch, 3.8 * inch]))
+
+    story.append(_p("Key Insights", h2))
+    for insight in insights:
+        story.append(_p(f"- {insight}", body))
+
+    story.append(_p("Prediction Model", h2))
+    if model_metrics:
+        model_rows = [["Model", model_name or "Selected classifier"]]
+        for key in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]:
+            model_rows.append([key.replace("_", " ").title(), f"{model_metrics.get(key, 0):.3f}"])
+        story.append(_table(model_rows, widths=[2.4 * inch, 3.8 * inch]))
+    else:
+        story.append(_p("The prediction model was not trained in this report session.", body))
+
+    story.append(_p("Suspicious Activity", h2))
+    flagged = anomaly_df[anomaly_df.get("is_suspicious", False)].copy() if not anomaly_df.empty else pd.DataFrame()
+    if flagged.empty:
+        story.append(_p("No suspicious records were flagged by the current rules.", body))
+    else:
+        grouped = (
+            flagged.groupby(["suspicious_category", "risk_level"], dropna=False)
+            .size()
+            .reset_index(name="records")
+            .sort_values("records", ascending=False)
+            .head(8)
+        )
+        rows = [["Issue", "Risk", "Records"]]
+        for _, row in grouped.iterrows():
+            rows.append([row["suspicious_category"], row["risk_level"], f"{int(row['records']):,}"])
+        story.append(_table(rows, widths=[3.3 * inch, 1.2 * inch, 1.3 * inch]))
+
+    story.append(_p("Recommendations", h2))
+    recommendations = [
+        "Review high-risk and medium-risk flagged records before approval.",
+        "Clean missing values and duplicate transaction IDs before model retraining.",
+        "Track repayment rate and suspicious activity by month to monitor portfolio movement.",
+        "Use the model as decision support, not as the only approval rule.",
+    ]
+    for item in recommendations:
+        story.append(_p(f"- {item}", body))
+
+    story.append(Spacer(1, 0.14 * inch))
+    story.append(_p("Generated by PulseIQ Africa.", small))
+    document.build(story)
+    return buffer.getvalue()
+
+
+def _table(rows: list[list[object]], widths: list[float]) -> Table:
+    wrapped = [[_cell(value) for value in row] for row in rows]
+    table = Table(wrapped, colWidths=widths, hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0D5C63")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("LEADING", (0, 0), (-1, -1), 10.5),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D8E3E7")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F8F9")]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    return table
+
+
+def _cell(value: object) -> Paragraph:
+    styles = getSampleStyleSheet()
+    style = ParagraphStyle("TableCell", parent=styles["BodyText"], fontSize=8.5, leading=10.5)
+    return Paragraph(escape(str(value)), style)
+
