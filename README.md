@@ -1,112 +1,105 @@
 # PulseIQ Africa
 
-PulseIQ Africa is an AI-powered decision intelligence web app for small businesses and financial teams. It turns CSV records into dashboards, risk predictions, suspicious-activity checks, and automated PDF reports.
+**Decision-intelligence web app for small businesses and financial teams.** Upload a CSV of business records and get back dashboards, credit-default risk predictions, suspicious-activity flags, and a downloadable PDF report.
 
-## Live Demo
 
-Add your Streamlit Community Cloud or Hugging Face Spaces link here after deployment.
 
-## Problem Statement
+## The problem
 
-Many small businesses and institutions in developing economies keep useful data in Excel or messy CSV files, but they do not have a simple way to turn that data into decisions. PulseIQ Africa helps users understand performance, credit risk, and suspicious activity from spreadsheet data.
+Small businesses and lending institutions in developing economies keep useful data in Excel and messy CSV files, but have no simple way to turn that data into decisions. Commercial BI and credit-scoring tools are priced for enterprises. PulseIQ closes that gap: it takes a spreadsheet as-is and returns performance, risk, and anomaly analysis without configuration.
 
-## Features
+## What it does
 
-- Upload a CSV file or load the built-in demo dataset.
-- Measure rows, columns, missing values, duplicate rows, and data quality score.
-- View dashboard KPIs, revenue trends, repayment/default status, risk levels, transaction distribution, customer segments, and suspicious-activity categories.
-- Train Logistic Regression, Random Forest, and Decision Tree models for default risk prediction.
-- Display accuracy, precision, recall, F1-score, ROC-AUC, and confusion matrix-ready results.
-- Score a single customer or loan application with a decision, reason, and suggested action.
-- Detect anomalies with transparent business rules.
-- Generate a downloadable PulseIQ Business Intelligence PDF report.
-- Ask a rule-based insight assistant business questions without needing a paid AI API.
+**Data quality assessment** — Reports row and column counts, missing values, duplicate rows, and an overall data-quality score before any analysis runs.
 
-## Tech Stack
+**Dashboards** — Revenue trends, repayment and default status, risk-level breakdowns, transaction distribution, customer segments, and suspicious-activity categories.
 
-- Streamlit for the web app
-- Python for application logic
-- pandas and numpy for data handling
-- Plotly for charts
-- scikit-learn for machine learning
-- ReportLab for PDF report generation
+**Credit risk prediction** — Trains three classifiers and selects the strongest by F1-score and ROC-AUC. Scores individual customers or loan applications with a decision, a reason, and a suggested action.
 
-## Screenshots
+**Anomaly detection** — Flags suspicious transactions using transparent, inspectable business rules rather than a black-box model, so a reviewer can always see why something was flagged.
 
-Add screenshots from the running app after deployment:
+**Reporting** — Generates a downloadable PDF business-intelligence report via ReportLab.
 
-- Home page
-- Dashboard page
-- Prediction page
-- Anomaly Detection page
-- Report page
+**Insight assistant** — Answers plain-language questions about the dataset using rule-based logic, with no paid AI API required.
 
-## How the Model Works
+## Tech stack
 
-PulseIQ normalizes uploaded CSV headers and builds a model frame from these fields when available:
+| Layer | Choice |
+|---|---|
+| Web app | Streamlit |
+| Language | Python |
+| Data | pandas, NumPy |
+| Charts | Plotly |
+| ML | scikit-learn |
+| PDF | ReportLab |
 
-- income
-- loan_amount
-- repayment_history_score
-- existing_debt
-- transaction_frequency
-- account_age_months
-- employment_status
-- segment
-- business_type
-- region
+## How the model works
 
-If the dataset contains a `defaulted` column, PulseIQ uses it as the target. If it contains `repayment_status`, default-like labels are converted into the target. If neither exists, PulseIQ derives a starter target from repayment history, loan-to-income pressure, and existing debt pressure so the demo remains testable.
+PulseIQ normalises uploaded CSV headers and assembles a model frame from these fields when present: `income`, `loan_amount`, `repayment_history_score`, `existing_debt`, `transaction_frequency`, `account_age_months`, `employment_status`, `segment`, `business_type`, `region`.
 
-## Evaluation Metrics
+Target selection follows a fallback chain:
 
-The app trains three beginner-friendly classifiers and selects the strongest one by F1-score and ROC-AUC:
+1. If the dataset has a `defaulted` column, that is the target.
+2. If it has `repayment_status`, default-like labels are converted into the target.
+3. If neither exists, a starter target is derived from repayment history, loan-to-income pressure, and existing-debt pressure so the demo remains testable.
+
+**On the derived target:** step 3 exists so the app is explorable without a labelled dataset. Metrics produced under a derived target measure how well the model recovers the derivation rule, not real-world default risk. Treat them as a smoke test, not evidence of predictive power. Bring your own labelled data for meaningful evaluation.
+
+## Models and metrics
+
+Three classifiers are trained and compared:
 
 - Logistic Regression
 - Random Forest
 - Decision Tree
 
-Displayed metrics:
+Reported for each: accuracy, precision, recall, F1-score, ROC-AUC, and confusion-matrix-ready output.
 
-- Accuracy
-- Precision
-- Recall
-- F1-score
-- ROC-AUC
-
-## How to Run Locally
+## Running locally
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/generate_demo_data.py
 streamlit run app.py
 ```
 
-## Deployment Notes
+The app opens at `http://localhost:8501`. Use the built-in demo dataset if you do not have a CSV to hand.
 
-For Streamlit Community Cloud:
+## Deploying
 
-1. Push this project to GitHub.
-2. Create a new Streamlit app from the repository.
-3. Set the main file path to `app.py`.
-4. Confirm that `requirements.txt` is detected.
+**Streamlit Community Cloud** — Push to GitHub, create a new app from the repo, set the main file path to `app.py`, and confirm `requirements.txt` is detected.
 
-For Hugging Face Spaces:
+**Hugging Face Spaces** — Create a Space with the Streamlit SDK, upload the repo, and keep `app.py` at the root.
 
-1. Create a new Space with the Streamlit SDK.
-2. Upload this repository.
-3. Keep `app.py` at the repository root.
+## Expected CSV format
 
-## Future Improvements
+Column names are matched loosely, so `Loan Amount`, `loan_amount`, and `LOAN_AMOUNT` all resolve to the same field. No column is strictly required — the app adapts to what it finds and reports which fields it used.
 
-- User login
-- Real database
-- Admin dashboard
-- AI chatbot API
-- Email report delivery
-- More datasets
-- Role-based access
-- API endpoint for businesses
+| Column | Type | Notes |
+|---|---|---|
+| `income` | numeric | Monthly or annual, used consistently |
+| `loan_amount` | numeric | Principal |
+| `repayment_history_score` | numeric | Higher is better |
+| `existing_debt` | numeric | Outstanding balance |
+| `transaction_frequency` | numeric | Transactions per period |
+| `account_age_months` | numeric | Account tenure |
+| `employment_status` | categorical | |
+| `segment` | categorical | |
+| `defaulted` | binary | Target, if available |
 
+## Limitations
+
+- Trained on modest datasets; not calibrated for production lending decisions.
+- Anomaly detection is rule-based, so it catches known patterns rather than novel fraud.
+- No authentication or persistence — sessions are stateless and data is not stored.
+- Single-user by design; not built for concurrent load.
+
+## Roadmap
+
+User login · persistent database · admin dashboard · LLM-backed chat assistant · scheduled email reports · role-based access · public API endpoint
+
+## Author
+
+Jomilojuoluwa Melvin Salami — [GitHub](https://github.com/M3lvin005) · [LinkedIn](https://linkedin.com/in/jomilojuoluwa-salami-493209227)
