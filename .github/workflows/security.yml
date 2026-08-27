@@ -1,0 +1,71 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Dependencies, source, secrets, and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+
+      - name: Install project Python and verify lock
+        run: |
+          uv python install
+          uv lock --check
+          uv sync --locked --no-dev
+
+      - name: Audit locked dependencies
+        run: >-
+          uv tool run --from pip-audit==2.10.1 pip-audit
+          -r requirements.txt --no-deps --disable-pip
+          --progress-spinner off --timeout 15
+
+      - name: Scan Python source
+        run: >-
+          uv tool run --from bandit==1.9.4 bandit
+          -r app.py src scripts -ll -ii
+
+      - name: Scan repository for secrets
+        run: | # pragma: allowlist secret
+          uv tool run --from detect-secrets==1.5.0 detect-secrets scan --all-files \
+            --exclude-files '(^|[\\/])(\.venv|\.git|data|\.mypy_cache|\.pytest_cache|\.ruff_cache|__pycache__)([\\/]|$)|(^|[\\/])(uv\.lock|requirements\.txt|package-lock\.json)$' \
+            > "$RUNNER_TEMP/detect-secrets.json"
+          uv run --no-sync python scripts/verify_secret_scan.py "$RUNNER_TEMP/detect-secrets.json"
+
+      - name: Generate validated reproducible CycloneDX SBOM
+        run: >-
+          uv tool run --from cyclonedx-bom==7.3.1 cyclonedx-py environment .venv
+          --pyproject pyproject.toml --mc-type application
+          --spec-version 1.6 --output-reproducible --output-format JSON
+          --output-file "$RUNNER_TEMP/pulseiq-africa.cdx.json" --validate
+
+      - name: Retain SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pulseiq-africa-cyclonedx-sbom
+          path: ${{ runner.temp }}/pulseiq-africa.cdx.json
+          if-no-files-found: error
+          retention-days: 30

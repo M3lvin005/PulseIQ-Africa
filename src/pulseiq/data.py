@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import IO
 
 import numpy as np
 import pandas as pd
-
 
 DEMO_DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "demo_pulseiq_transactions.csv"
 
@@ -57,24 +57,25 @@ def load_demo_data() -> pd.DataFrame:
     return generate_demo_data()
 
 
-def load_csv(file_obj: object) -> pd.DataFrame:
+def load_csv(file_obj: str | Path | IO[str] | IO[bytes]) -> pd.DataFrame:
     """Load a user CSV upload and normalize its column names."""
 
     return normalize_columns(pd.read_csv(file_obj))
 
 
 def data_quality(df: pd.DataFrame) -> DataQuality:
-    """Compute compact quality metrics for the uploaded or demo dataset."""
+    """Return the legacy quality summary backed by governed assessment.
+
+    New code should consume :func:`pulseiq.datasets.assess_dataset` directly so
+    it can act on separate dimensions, issues, and capability readiness.
+    """
 
     rows, columns = df.shape
     missing_values = int(df.isna().sum().sum())
     duplicate_rows = int(df.duplicated().sum())
-    total_cells = max(rows * columns, 1)
+    from .datasets import assess_dataset
 
-    missing_penalty = (missing_values / total_cells) * 55
-    duplicate_penalty = (duplicate_rows / max(rows, 1)) * 35
-    narrow_penalty = 8 if columns < 6 else 0
-    score = max(0.0, min(100.0, 100.0 - missing_penalty - duplicate_penalty - narrow_penalty))
+    score = assess_dataset(df).composite_score
 
     return DataQuality(
         rows=int(rows),
@@ -200,4 +201,3 @@ def first_existing(columns: Iterable[str], candidates: Iterable[str]) -> str | N
         if candidate in available:
             return candidate
     return None
-

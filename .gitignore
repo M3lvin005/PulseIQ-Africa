@@ -1,7 +1,17 @@
 .venv/
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
 .streamlit/secrets.toml
 reports/
 models/

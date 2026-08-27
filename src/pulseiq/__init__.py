@@ -4,8 +4,9 @@ __all__ = [
     "analytics",
     "anomaly",
     "assistant",
+    "audit",
     "data",
+    "identity",
     "model",
     "report",
 ]
-

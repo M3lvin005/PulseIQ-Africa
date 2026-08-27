@@ -22,7 +22,7 @@ def calculate_kpis(df: pd.DataFrame, anomaly_df: pd.DataFrame | None = None) -> 
     quality = data_quality(df)
     amount = _numeric(df, "transaction_amount")
     defaulted = _numeric(df, "defaulted")
-    customer_count = int(df["customer_id"].nunique()) if "customer_id" in df.columns else int(len(df))
+    customer_count = int(df["customer_id"].nunique()) if "customer_id" in df.columns else len(df)
 
     if anomaly_df is not None and "is_suspicious" in anomaly_df.columns:
         suspicious_records = int(anomaly_df["is_suspicious"].sum())
@@ -34,7 +34,7 @@ def calculate_kpis(df: pd.DataFrame, anomaly_df: pd.DataFrame | None = None) -> 
     repayment_rate = float((1 - defaulted.clip(0, 1).mean()) * 100) if len(defaulted) else 0.0
 
     return {
-        "records_processed": int(len(df)),
+        "records_processed": len(df),
         "total_revenue": float(amount.sum()),
         "total_customers": customer_count,
         "average_transaction_value": float(amount.mean() if len(amount) else 0.0),
@@ -91,9 +91,11 @@ def make_insights(
     insights: list[str] = []
 
     if "segment" in df.columns and "transaction_amount" in df.columns:
-        segment_revenue = df.assign(transaction_amount=_numeric(df, "transaction_amount")).groupby("segment")[
-            "transaction_amount"
-        ].sum()
+        segment_revenue = (
+            df.assign(transaction_amount=_numeric(df, "transaction_amount"))
+            .groupby("segment")["transaction_amount"]
+            .sum()
+        )
         if not segment_revenue.empty:
             top_segment = str(segment_revenue.idxmax())
             insights.append(f"{top_segment} is the strongest customer segment by total transaction value.")
@@ -133,7 +135,7 @@ def make_insights(
     if anomaly_df is not None and "suspicious_category" in anomaly_df.columns:
         flagged = anomaly_df[anomaly_df.get("is_suspicious", False)]
         if not flagged.empty:
-            top_issue = flagged["suspicious_category"].value_counts().idxmax()
+            top_issue = str(flagged["suspicious_category"].value_counts().idxmax())
             insights.append(f"The most common suspicious pattern is {top_issue.lower()}.")
 
     return insights[:7]
@@ -143,4 +145,3 @@ def format_currency(value: float | int) -> str:
     """Format values as Nigerian naira without relying on special glyphs."""
 
     return f"NGN {float(value):,.0f}"
-

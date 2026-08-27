@@ -1,104 +1,105 @@
 # PulseIQ Africa
 
-**Decision-intelligence web app for small businesses and financial teams.** Upload a CSV of business records and get back dashboards, credit-default risk predictions, suspicious-activity flags, and a downloadable PDF report.
+PulseIQ Africa is a stabilized Streamlit decision-intelligence prototype for exploring portfolio CSVs. It provides governed data-quality results, transaction/customer/outcome metrics, transparent suspicious-activity rules, demonstration model comparison, a deterministic assistant, and accessible HTML/PDF reports.
 
+> Demonstration only. PulseIQ is not production lending infrastructure and must not be used as the sole basis for a credit or other significant decision.
 
+## Current product boundary
 
-## The problem
+The prototype validates this controlled flow:
 
-Small businesses and lending institutions in developing economies keep useful data in Excel and messy CSV files, but have no simple way to turn that data into decisions. Commercial BI and credit-scoring tools are priced for enterprises. PulseIQ closes that gap: it takes a spreadsheet as-is and returns performance, risk, and anomaly analysis without configuration.
+```text
+CSV or synthetic demo data
+  -> bounded UTF-8 CSV validation and traceable normalized headers
+  -> capability-specific validation and six quality dimensions
+  -> governed metrics with unavailable states and provenance
+  -> versioned prototype rules
+  -> guarded model exploration
+  -> evidence-linked assistant and HTML/PDF report
+```
+
+It does not yet provide authentication, tenancy, persistence, human decision/appeal workflows, production model governance, asynchronous jobs, audit storage, or production observability. See [`docs/planning/README.md`](docs/planning/README.md) for the production blueprint and requirements.
 
 ## What it does
 
-**Data quality assessment** — Reports row and column counts, missing values, duplicate rows, and an overall data-quality score before any analysis runs.
+- **Dataset assessment:** separately scores completeness, validity, uniqueness, consistency, timeliness, and fitness; blocking issues override the composite score.
+- **Capability guards:** transaction, customer, outcome, rule, and model paths stop when required inputs are absent or wholly invalid.
+- **Governed metrics:** every value carries status, unit/currency, period, quality, definition version, dataset hash, and recovery guidance. Transaction value is not labelled revenue; row outcome share is not labelled repayment rate.
+- **Bounded ingestion:** uploads are limited to 10 MB, 100,000 rows, and 200 columns; encoding, delimiter, extension, binary content, parsing, empty headers, and normalized-header collisions receive safe error codes and recovery guidance.
+- **Transparent rules:** `prototype-risk-rules/2.0.0` records triggered, clear, or `not_evaluated` status per rule and row; missing evidence is never median-imputed into a clear rule result.
+- **Model exploration:** a governed eligibility seam requires explicit allowlisted outcomes, sufficient rows/classes, bounded missingness/cardinality, and complete feature mappings. Candidates are selected on validation data and reported on a separate holdout; scores are visibly unapproved and uncalibrated.
+- **Reporting and assistant:** both consume the same governed metric snapshot. Semantic HTML is the primary accessible report; PDF is secondary.
+- **Production identity seam:** provider-neutral contracts now define authoritative server sessions, current-membership RBAC, MFA, audited role/revocation administration, and secure one-time workspace invitations. A locally verified PostgreSQL/RLS/Psycopg adapter persists this identity state with chained audit/outbox evidence; it is not connected to a provider, secure cookie/API adapter, delivery service, deployed database, or this Streamlit UI.
+- **Governed upload seam:** authorized direct-upload reservations bind a tenant/version quarantine key to exact type, bytes, and SHA-256; completion is idempotent, mismatches are durably quarantined, and scan jobs carry references only. PostgreSQL/RLS metadata exists locally, but S3, scanning, Celery/Redis, API, and UI adapters remain undeployed.
 
-**Dashboards** — Revenue trends, repayment and default status, risk-level breakdowns, transaction distribution, customer segments, and suspicious-activity categories.
+## Toolchain
 
-**Credit risk prediction** — Trains three classifiers and selects the strongest by F1-score and ROC-AUC. Scores individual customers or loan applications with a decision, a reason, and a suggested action.
-
-**Anomaly detection** — Flags suspicious transactions using transparent, inspectable business rules rather than a black-box model, so a reviewer can always see why something was flagged.
-
-**Reporting** — Generates a downloadable PDF business-intelligence report via ReportLab.
-
-**Insight assistant** — Answers plain-language questions about the dataset using rule-based logic, with no paid AI API required.
-
-## Tech stack
-
-| Layer | Choice |
+| Need | Choice |
 |---|---|
-| Web app | Streamlit |
-| Language | Python |
-| Data | pandas, NumPy |
-| Charts | Plotly |
-| ML | scikit-learn |
+| Runtime | Python 3.12 |
+| Environment/lock | uv + `pyproject.toml` + `uv.lock` |
+| Web | Streamlit |
+| Data/charts | pandas, NumPy, Plotly |
+| Demonstration ML | scikit-learn |
 | PDF | ReportLab |
+| Quality gates | pytest, pytest-cov, Hypothesis, Ruff, strict mypy, Streamlit AppTest |
+| Security gates | pip-audit, Bandit, detect-secrets, CycloneDX SBOM, commit-pinned GitHub Actions |
 
-## How the model works
+## Run locally
 
-PulseIQ normalises uploaded CSV headers and assembles a model frame from these fields when present: `income`, `loan_amount`, `repayment_history_score`, `existing_debt`, `transaction_frequency`, `account_age_months`, `employment_status`, `segment`, `business_type`, `region`.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
-Target selection follows a fallback chain:
-
-1. If the dataset has a `defaulted` column, that is the target.
-2. If it has `repayment_status`, default-like labels are converted into the target.
-3. If neither exists, a starter target is derived from repayment history, loan-to-income pressure, and existing-debt pressure so the demo remains testable.
-
-**On the derived target:** step 3 exists so the app is explorable without a labelled dataset. Metrics produced under a derived target measure how well the model recovers the derivation rule, not real-world default risk. Treat them as a smoke test, not evidence of predictive power. Bring your own labelled data for meaningful evaluation.
-
-## Models and metrics
-
-Three classifiers are trained and compared:
-
-- Logistic Regression
-- Random Forest
-- Decision Tree
-
-Reported for each: accuracy, precision, recall, F1-score, ROC-AUC, and confusion-matrix-ready output.
-
-## Running locally
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/generate_demo_data.py
-streamlit run app.py
+```powershell
+uv sync --locked
+uv run python scripts/generate_demo_data.py
+uv run streamlit run app.py
 ```
 
-The app opens at `http://localhost:8501`. Use the built-in demo dataset if you do not have a CSV to hand.
+The app opens at `http://localhost:8501`. The built-in synthetic dataset has an explicitly confirmed `NGN` currency. Uploaded datasets begin with currency unconfirmed, so financial metrics remain unavailable until the user confirms it.
 
-## Deploying
+Run the complete local verification cycle:
 
-**Streamlit Community Cloud** — Push to GitHub, create a new app from the repo, set the main file path to `app.py`, and confirm `requirements.txt` is detected.
+```powershell
+uv lock --check
+uv run ruff check app.py src scripts tests
+uv run ruff format --check app.py src scripts tests
+uv run mypy
+uv run pytest -q
+uv run python scripts/smoke_check.py
+```
 
-**Hugging Face Spaces** — Create a Space with the Streamlit SDK, upload the repo, and keep `app.py` at the root.
+`requirements.txt` is an exported, locked compatibility file for hosts that do not install from `pyproject.toml`; `uv.lock` remains the source of truth.
 
-## Expected CSV format
+The Security workflow performs a weekly and change-triggered dependency, source, and secret scan and retains a validated CycloneDX SBOM. See [`SECURITY.md`](SECURITY.md), the [security audit](docs/planning/security_audit_2026-08-25.md), and [operational runbooks](docs/runbooks/README.md).
 
-Column names are matched loosely, so `Loan Amount`, `loan_amount`, and `LOAN_AMOUNT` all resolve to the same field. No column is strictly required — the app adapts to what it finds and reports which fields it used.
+## Canonical prototype fields
 
-| Column | Type | Notes |
-|---|---|---|
-| `income` | numeric | Monthly or annual, used consistently |
-| `loan_amount` | numeric | Principal |
-| `repayment_history_score` | numeric | Higher is better |
-| `existing_debt` | numeric | Outstanding balance |
-| `transaction_frequency` | numeric | Transactions per period |
-| `account_age_months` | numeric | Account tenure |
-| `employment_status` | categorical | |
-| `segment` | categorical | |
-| `defaulted` | binary | Target, if available |
+Headers are normalized to snake case only after bounded parsing and collision checks. The UI shows conservative concept suggestions, but a column's name or presence does not confirm its business meaning.
 
-## Limitations
+| Capability | Required canonical inputs |
+|---|---|
+| Transaction metrics | `transaction_amount`, `date`, plus one confirmed currency |
+| Customer metrics | `customer_id` |
+| Outcome share | canonical binary `defaulted` |
+| Prototype rules | `transaction_amount`, `income`, `loan_amount`, `existing_debt`, `repayment_history_score`, `transaction_frequency` |
+| Model exploration | `income`, `loan_amount`, `repayment_history_score`, `existing_debt`, `transaction_frequency`, `account_age_months`, `employment_status`, `segment`, `business_type`, `region`, plus `defaulted` or `repayment_status` |
 
-- Trained on modest datasets; not calibrated for production lending decisions.
-- Anomaly detection is rule-based, so it catches known patterns rather than novel fraud.
-- No authentication or persistence — sessions are stateless and data is not stored.
-- Single-user by design; not built for concurrent load.
+Uploads still need a persistent confirmation workflow for units, periods, business keys, amount direction, time semantics, and reusable mapping versions. Do not treat suggestions or header normalization as authoritative semantic mapping.
 
-## Roadmap
+## Deployment boundary
 
-User login · persistent database · admin dashboard · LLM-backed chat assistant · scheduled email reports · role-based access · public API endpoint
+The prototype can be deployed to Streamlit-compatible hosting with `app.py` as the entrypoint and `requirements.txt` as the compatibility dependency file. Use synthetic data only. Production deployment is intentionally blocked on the identity, tenant isolation, storage, audit, privacy, job, accessibility, security, and governance controls in the planning pack.
+
+## Known limitations
+
+- Single-session Streamlit prototype; no authentication, tenant isolation, persistent database, immutable uploads, or audit log.
+- Identity-domain scaffolding does not make the Streamlit prototype authenticated or multi-tenant; real-data use remains prohibited until the adapters and defense-in-depth controls in `docs/planning/identity_authorization_contract.md` are deployed and tested.
+- Prototype rules are hard-coded and not yet stored in an approval/rollback workflow.
+- Model comparison now isolates customer groups across train/validation/holdout when usable IDs exist, but still lacks temporal validation, confidence intervals, calibration, fairness/slice review, drift monitoring, registry approval, and human decision workflows.
+- Uploaded files are bounded and parsed in-process but do not yet have production object storage, content-signature inspection, malware scanning, or quarantine controls.
+- Rendered responsive, heading, focus, skip-link, chart-table, and model-flow checks are recorded in `docs/planning/accessibility_verification.md`; NVDA/VoiceOver, actual 200% zoom, axe integration, and Streamlit landmark acceptance remain open.
+- Jurisdiction, residency, DPIA, responsible-lending policy, metric glossary, and stakeholder ADR acceptance remain open decision gates.
+- Internet-facing real-data use remains blocked on identity/tenancy, secure persistence and upload quarantine, workload isolation/rate limits, immutable audit telemetry, and deployment infrastructure controls.
 
 ## Author
 

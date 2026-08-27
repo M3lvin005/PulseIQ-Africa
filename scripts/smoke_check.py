@@ -8,25 +8,36 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from pulseiq.analytics import calculate_kpis, make_insights
-from pulseiq.anomaly import detect_anomalies
+from pulseiq.anomaly import RULESET_VERSION, detect_anomalies
 from pulseiq.assistant import answer_question
 from pulseiq.data import load_demo_data
 from pulseiq.model import score_customer, train_models
+from pulseiq.portfolio_metrics import MetricId, build_metric_insights, calculate_portfolio_metrics
 from pulseiq.report import build_report_pdf
+
+
+def require(condition: bool, message: str) -> None:
+    """Raise a durable smoke-check failure even when optimization is enabled."""
+    if not condition:
+        raise RuntimeError(message)
 
 
 def main() -> None:
     df = load_demo_data()
-    assert len(df) >= 1000, "demo dataset should be portfolio-sized"
+    require(len(df) >= 1000, "Demo dataset should be portfolio-sized.")
 
     anomalies = detect_anomalies(df)
-    kpis = calculate_kpis(df, anomalies)
-    assert kpis["records_processed"] == len(df)
-    assert kpis["suspicious_transactions"] > 0
+    metrics = calculate_portfolio_metrics(
+        df,
+        currency="NGN",
+        anomaly_dataframe=anomalies,
+        risk_rule_version=RULESET_VERSION,
+    )
+    require(metrics.metric(MetricId.RECORDS_PROCESSED).value == len(df), "Processed-row metric is inconsistent.")
+    require(int(metrics.metric(MetricId.SUSPICIOUS_RECORDS).value or 0) > 0, "Demo rule run found no records.")
 
     bundle = train_models(df)
-    assert bundle.metrics["f1_score"] >= 0
+    require(bundle.metrics["f1_score"] >= 0, "Model F1 score is invalid.")
 
     result = score_customer(
         bundle,
@@ -43,20 +54,30 @@ def main() -> None:
             "region": "Lagos",
         },
     )
-    assert "decision" in result
+    require(result["routing"] == "Manual review required", "Model output bypassed manual review.")
 
-    insights = make_insights(df, kpis, anomalies, bundle.metrics)
-    pdf = build_report_pdf(df, kpis, anomalies, insights, bundle.name, bundle.metrics)
-    assert len(pdf) > 3000
+    insights = list(build_metric_insights(metrics))
+    pdf = build_report_pdf(
+        df,
+        metrics,
+        anomalies,
+        insights,
+        bundle.name,
+        bundle.metrics,
+        bundle.provenance.run_id,
+        bundle.provenance.split_strategy,
+        bundle.provenance.probability_status,
+    )
+    require(len(pdf) > 3000, "Generated PDF is unexpectedly small.")
 
-    reply = answer_question("What is the biggest risk?", df, kpis, anomalies, bundle.metrics)
-    assert reply
+    reply = answer_question("What is the biggest risk?", df, metrics, anomalies, bundle.metrics)
+    require(bool(reply), "Assistant returned an empty response.")
 
     print("PulseIQ smoke check passed")
     print(f"Rows: {len(df):,}")
     print(f"Model: {bundle.name}")
     print(f"Metrics: {bundle.metrics}")
-    print(f"Suspicious records: {kpis['suspicious_transactions']:,}")
+    print(f"Suspicious records: {int(metrics.metric(MetricId.SUSPICIOUS_RECORDS).value or 0):,}")
 
 
 if __name__ == "__main__":
