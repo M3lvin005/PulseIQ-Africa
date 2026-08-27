@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from pulseiq.privacy import PrivacyPolicy, minimize_tabular_data
+
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
 
 
@@ -16,10 +18,14 @@ def _neutralize_cell(value: object) -> object:
     return value
 
 
-def safe_csv_bytes(dataframe: pd.DataFrame) -> bytes:
-    """Serialize a copy after neutralizing spreadsheet formula prefixes."""
+def safe_csv_bytes(dataframe: pd.DataFrame, *, privacy_policy: PrivacyPolicy | None = None) -> bytes:
+    """Serialize a minimized copy after neutralizing spreadsheet formulas."""
 
-    sanitized = dataframe.copy(deep=True)
+    sanitized = (
+        minimize_tabular_data(dataframe, policy=privacy_policy)[0]
+        if privacy_policy is not None
+        else dataframe.copy(deep=True)
+    )
     for column in sanitized.columns:
         sanitized[column] = sanitized[column].map(_neutralize_cell)
     return sanitized.to_csv(index=False).encode("utf-8-sig")

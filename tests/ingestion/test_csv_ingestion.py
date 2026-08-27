@@ -12,6 +12,7 @@ from pulseiq.ingestion import (
     UploadRejected,
     ingest_csv,
 )
+from pulseiq.privacy import DEMO_PRIVACY_POLICY
 
 
 def test_ingest_csv_returns_normalized_data_and_reproducible_metadata() -> None:
@@ -85,3 +86,19 @@ def test_ingest_csv_wraps_parser_details_in_a_safe_error() -> None:
     assert error.value.code is UploadErrorCode.PARSE_FAILED
     assert "unclosed" not in error.value.user_message.lower()
     assert "token" not in error.value.user_message.lower()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"customer_id,email_address\nCUST-1,person@example.com\n",
+        b"customer_id,notes\nCUST-1,person@example.com\n",
+    ],
+)
+def test_demo_privacy_policy_rejects_personal_data_without_echoing_it(payload: bytes) -> None:
+    with pytest.raises(UploadRejected) as error:
+        ingest_csv(payload, filename="data.csv", privacy_policy=DEMO_PRIVACY_POLICY)
+
+    assert error.value.code is UploadErrorCode.RESTRICTED_DATA
+    assert "person@example.com" not in error.value.user_message
+    assert "de-identify" in error.value.recovery

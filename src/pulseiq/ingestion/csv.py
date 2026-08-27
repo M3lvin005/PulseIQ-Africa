@@ -11,6 +11,7 @@ from typing import Never
 import pandas as pd
 
 from pulseiq.data import normalize_column_name
+from pulseiq.privacy import PrivacyPolicy, assess_tabular_privacy
 
 from .contracts import (
     DEFAULT_UPLOAD_POLICY,
@@ -109,6 +110,7 @@ def ingest_csv(
     filename: str,
     policy: UploadPolicy = DEFAULT_UPLOAD_POLICY,
     preserve_lexical_values: bool = False,
+    privacy_policy: PrivacyPolicy | None = None,
 ) -> IngestedDataset:
     """Validate and parse one CSV without exposing parser internals to callers."""
 
@@ -175,6 +177,14 @@ def ingest_csv(
         )
 
     dataframe.columns = [mapping.normalized for mapping in mappings]
+    if privacy_policy is not None:
+        privacy = assess_tabular_privacy(dataframe, policy=privacy_policy)
+        if privacy.restricted:
+            _reject(
+                UploadErrorCode.RESTRICTED_DATA,
+                "This file appears to contain personal or regulated identifiers and cannot be used in demo mode.",
+                "Remove or irreversibly de-identify the flagged fields in the source system, then upload a new CSV.",
+            )
     metadata = IngestionMetadata(
         filename=safe_filename,
         size_bytes=len(payload),

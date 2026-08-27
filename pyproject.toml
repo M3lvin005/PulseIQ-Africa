@@ -35,12 +35,12 @@ dev = [
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers --cov=pulseiq.audit --cov=pulseiq.datasets --cov=pulseiq.identity --cov=pulseiq.ingestion --cov=pulseiq.jobs --cov=pulseiq.modeling --cov=pulseiq.portfolio_metrics --cov=pulseiq.postgres --cov-report=term-missing --cov-fail-under=90"
+addopts = "--strict-config --strict-markers --cov=pulseiq.audit --cov=pulseiq.datasets --cov=pulseiq.http_security --cov=pulseiq.identity --cov=pulseiq.ingestion --cov=pulseiq.jobs --cov=pulseiq.modeling --cov=pulseiq.portfolio_metrics --cov=pulseiq.postgres --cov=pulseiq.privacy --cov=pulseiq.production_config --cov=pulseiq.rate_limit --cov-report=term-missing --cov-fail-under=90"
 testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["pulseiq.audit", "pulseiq.datasets", "pulseiq.identity", "pulseiq.ingestion", "pulseiq.jobs", "pulseiq.modeling", "pulseiq.portfolio_metrics", "pulseiq.postgres"]
+source = ["pulseiq.audit", "pulseiq.datasets", "pulseiq.http_security", "pulseiq.identity", "pulseiq.ingestion", "pulseiq.jobs", "pulseiq.modeling", "pulseiq.portfolio_metrics", "pulseiq.postgres", "pulseiq.privacy", "pulseiq.production_config", "pulseiq.rate_limit"]
 
 [tool.coverage.report]
 exclude_also = [

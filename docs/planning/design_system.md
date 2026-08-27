@@ -118,6 +118,25 @@ The boundary is intentional: the mobile media query ends at 767.98 px so fractio
 - Desktop may show four stages in one row. Tablet uses two columns and phone uses one column without changing reading order.
 - A stage cannot imply completion when the backing capability does not exist. The prototype therefore says “confirm meaning first” rather than presenting a false activation action.
 
+### Evidence scope and delivery
+
+- Scope filters name the dimension they change, announce the matching record count, and preserve the source version/fingerprint in the trust ribbon. Filtering changes the analytical view only; it never rewrites source evidence.
+- Portfolio surfaces lead with decision measures and one or two high-signal comparisons. Secondary distributions belong behind an explicit disclosure region with a table alternative.
+- Report delivery is ordered snapshot → definitions → disclosures → downloads. The preview must show source, row count, quality, rule coverage, model status, and observations before export.
+- Accessible HTML is the primary report artifact. PDF, CSV, and XLSX are companion formats and must retain the same unavailable states and source metadata.
+
+### Model and assistant evidence
+
+- Model exploration uses the sequence snapshot → eligibility → validation → human review. A score control is unavailable until eligibility passes and a model run exists.
+- Model status is always written as approved/unapproved, calibrated/uncalibrated, and explanation available/unavailable; never communicate readiness through colour alone.
+- Assistant answers show an Answer heading, deterministic source path, and a disclosure containing source, rows, period, filters, rule version, and model status. Answers link users back to row-level or report evidence for consequential interpretation.
+
+### Contrast-safe glass surfaces
+
+- Every semantic foreground token must be applied to the current framework's real DOM selectors, including React-Aria comboboxes, metric labels, popovers, option rows, segmented controls, and icon buttons. Test rendered computed styles in both explicit themes.
+- Glass is a hierarchy accent, not a content background: use it on workflow/filter/navigation containers with a tinted opaque fallback. Keep metrics, tables, forms, and chart canvases opaque enough that text contrast does not depend on backdrop imagery.
+- Interactive glass controls require a visible border, hover state, keyboard focus ring, and selected state whose text/background pair is independently readable in Light and Dark modes.
+
 ### Metrics and cards
 
 - A metric includes label, value or explicit unavailable state, unit/period, and definition help where needed.
@@ -143,6 +162,12 @@ The boundary is intentional: the mobile media query ends at 767.98 px so fractio
 - Success, warning, error, and information messages use the same semantic role in both themes.
 - Toasts are transient confirmation, not the only record of a consequential outcome.
 - Dialogs trap focus, restore it on close, and keep the initiating context visible where practical.
+
+### Evidence inspectors and progress
+
+- An inspector receives a filtered evidence set and stable identifier, then exposes the selected source record, status, rule/quality evidence, provenance, and safe actions. Desktop uses an adjacent panel; mobile uses a full-width expansion.
+- Selectors preserve the active filters, dataset/version, and return path. Large sets are capped or paginated in the prototype and must use virtualized/search-backed results in production.
+- Long-running work uses one job contract: stable ID, phase, percent/state, heartbeat, cancellation, retry/error, and artifact reference. Local progress and the Activity Center must never show success before the backing callback or worker result succeeds.
 
 ## 8. Accessibility and quality gate
 

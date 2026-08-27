@@ -4,7 +4,7 @@
 
 PulseIQ Africa `0.1.x` is a synthetic-data decision-intelligence prototype. Only the current `main` branch is maintained. It is not approved to receive personal, financial, credit, customer, production, or otherwise confidential data.
 
-The prototype has no authentication, authorization, tenancy, persistent storage, immutable audit log, malware quarantine, rate limiting, or production monitoring. Those are release blockers, not accepted production risks. See [`docs/planning/security_audit_2026-08-25.md`](docs/planning/security_audit_2026-08-25.md).
+The Streamlit request path has no connected authentication, tenancy, persistent store, immutable audit service, malware quarantine, shared rate-limit service, or production monitoring. The repository contains tested default-deny identity/RLS, secure-cookie/CSRF, quarantine/scanner, worker, audit/outbox, exact-origin/CSP, Redis rate-limit, privacy-minimization, and startup-gate seams; none of those local seams is evidence of a deployed control. The unresolved deployment and operational gates remain blockers, not accepted production risks. See [`docs/planning/security_audit_2026-08-25.md`](docs/planning/security_audit_2026-08-25.md).
 
 ## Reporting a vulnerability
 

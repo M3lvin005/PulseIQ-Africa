@@ -187,6 +187,7 @@ Alert detail must display all triggered rules, severity per rule, evidence value
 - Trends, distributions, cohorts, and segment comparison.
 - Drill-down from aggregate to row while preserving filters and back state.
 - Export current result with metadata and safe spreadsheet formatting.
+- Prototype alignment: the Portfolio screen leads with labeled Segment, Region, and Business type scope controls, announces the matching source-row count, and separates four decision measures from secondary governed metrics. Trend and priority comparisons keep semantic table alternatives; distributions are a secondary disclosure.
 
 ### Risk alerts/cases
 
@@ -219,6 +220,7 @@ Alert detail must display all triggered rules, severity per rule, evidence value
 - Report period/filter/source preview and disclosures.
 - Generation history with status, owner, hash, recipients, and expiration.
 - Accessible HTML view as primary; tagged PDF and CSV/XLSX as secondary outputs.
+- Prototype alignment: Reports makes delivery order visible as snapshot → definitions → disclosures → downloads, then shows a semantic source/quality/rules/model context table and evidence-led disclosures before offering accessible HTML and PDF downloads.
 
 ### Assistant
 
@@ -228,6 +230,7 @@ Alert detail must display all triggered rules, severity per rule, evidence value
 - Refuse or constrain attempts to bypass access control, reveal another tenant, or make an unreviewed lending decision.
 - Provide feedback controls and escalation to a human.
 - Deterministic metric/query tools first; optional LLM only for language planning/synthesis.
+- Prototype alignment: the Assistant exposes an ordered answer path and a named Evidence context disclosure with source, period, filters, rule version, and model status. The response is informational and routes users back to Portfolio, Risk review, or Reports for evidence.
 
 ### Administration
 

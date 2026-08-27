@@ -6,7 +6,11 @@ __all__ = [
     "assistant",
     "audit",
     "data",
+    "http_security",
     "identity",
     "model",
+    "privacy",
+    "production_config",
+    "rate_limit",
     "report",
 ]

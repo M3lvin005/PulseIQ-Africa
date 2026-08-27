@@ -192,3 +192,41 @@ def test_demo_dashboard_renders_governed_metrics_without_legacy_labels() -> None
     assert any(selectbox.label == "Region" for selectbox in app.selectbox)
     assert any(selectbox.label == "Business type" for selectbox in app.selectbox)
     assert all(metric.label not in {"Total revenue", "Repayment rate"} for metric in app.metric)
+
+
+def test_demo_portfolio_scope_filter_recomputes_visible_evidence() -> None:
+    """Portfolio filters narrow the analytical scope without mutating the source snapshot."""
+
+    app = AppTest.from_file(APP_PATH, default_timeout=20)
+    app.session_state["data"] = load_demo_data()
+    app.session_state["data_source"] = "Built-in demo loan and transaction data"
+    app.session_state["data_currency"] = "NGN"
+    app.session_state["model_bundle"] = None
+
+    app.run(timeout=20)
+    next(radio for radio in app.radio if radio.label == "Workspace").set_value("Portfolio").run(timeout=20)
+    next(selectbox for selectbox in app.selectbox if selectbox.label == "Segment").set_value("Agriculture").run(
+        timeout=20
+    )
+
+    assert not app.exception
+    assert any("Viewing 715 of 5,000 source records" in caption.value for caption in app.caption)
+    assert any(metric.label == "Unique customers" and metric.value == "643" for metric in app.metric)
+
+
+def test_demo_assistant_exposes_answer_path_and_evidence_context() -> None:
+    """Assistant output is presented as traceable evidence, not an unqualified chat bubble."""
+
+    app = AppTest.from_file(APP_PATH, default_timeout=20)
+    app.session_state["data"] = load_demo_data()
+    app.session_state["data_source"] = "Built-in demo loan and transaction data"
+    app.session_state["data_currency"] = "NGN"
+    app.session_state["model_bundle"] = None
+
+    app.run(timeout=20)
+    next(radio for radio in app.radio if radio.label == "Workspace").set_value("Insight Assistant").run(timeout=20)
+
+    assert not app.exception
+    assert any(title.value == "Insight Assistant" for title in app.title)
+    assert any(header.value == "Answer" for header in app.header)
+    assert any(expander.label == "Evidence context" for expander in app.expander)

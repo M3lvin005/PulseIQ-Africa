@@ -25,6 +25,14 @@ Standard target: WCAG 2.2 AA; this evidence is not a conformance certification
 - The Data intake and Risk review slice was additionally rendered at 320, 375, and 1440 px in both semantic palettes. The ordered intake reflows from four columns to one without changing source order, and the three Risk filters stack to full width on phone.
 - The intake heading hierarchy was corrected to H1 → H2 after rendered inspection. Loading sample data now runs as a pre-render callback, so the sidebar source, workflow stage, currency, and quality state update in the same render.
 - The Risk queue's Priority control was browser-exercised from all 735 flags to the two High-priority flags; the visible count and filtered download remained available. The page explicitly states that a flag is not a fraud finding, case disposition, or final decision.
+- Portfolio scope controls are programmatically labeled Segment, Region, and Business type. The browser proof selected Agriculture and exposed “Viewing 715 of 5,000 source records” with the recomputed customer metric, making analytical scope visible without implying that the source snapshot changed.
+- Portfolio's primary trend and priority comparisons are followed by semantic table alternatives; secondary distributions remain behind a named disclosure region so the main decision path stays scannable on phone.
+- Reports expose a semantic Report evidence context table, explicit unavailable/disclosure copy, and a staged delivery order. Accessible HTML is the primary export and PDF is a companion; the two download controls stack at 375 px without horizontal overflow.
+- At 1440 and 375 px, Portfolio and Reports preserve H1→H2 order, keep workflow stages and evidence columns in source order, and render zero document-level horizontal overflow.
+- Model exploration now places eligibility and provenance before training/scoring, and its ordered workflow exposes the blocked/ready state in words. The phone render stacks the workflow stages and eligibility metrics without clipping.
+- Assistant responses are introduced by a labeled Answer heading and paired with a named Evidence context disclosure containing source, rows, period, filters, rule version, and model status. The 375 px render preserved H1→H2 order and zero document-level overflow.
+- A second rendered contrast audit identified React-Aria selectors that bypassed the original theme rules. Select labels, metric labels, combobox values/arrows, popover options, expander summaries, and theme segments were corrected and rechecked in explicit Light and Dark modes; no visible dark-on-dark or light-on-light control text remained.
+- Glass surfaces are restricted to workflow/filter/navigation containers with semantic tinted fallbacks. Dense metric cards, tables, and chart surfaces remain opaque; `prefers-reduced-motion` and unsupported-backdrop fallback rules remain active.
 
 ## Residual manual or platform work
 

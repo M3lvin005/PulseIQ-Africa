@@ -18,7 +18,7 @@ from pulseiq.analytics import (
     default_breakdown,
     monthly_revenue,
 )
-from pulseiq.anomaly import RULESET_VERSION, anomaly_summary, detect_anomalies, rule_coverage
+from pulseiq.anomaly import RULE_DEFINITIONS, RULESET_VERSION, anomaly_summary, detect_anomalies, rule_coverage
 from pulseiq.assistant import answer_question
 from pulseiq.data import load_demo_data
 from pulseiq.datasets import DatasetCapability, IssueSeverity, assess_dataset
@@ -37,6 +37,7 @@ from pulseiq.portfolio_metrics import (
     build_metric_insights,
     calculate_portfolio_metrics,
 )
+from pulseiq.privacy import DEMO_PRIVACY_POLICY
 from pulseiq.report import build_report_html, build_report_pdf
 from pulseiq.ui import (
     THEME_MODES,
@@ -45,8 +46,11 @@ from pulseiq.ui import (
     mobile_navigation,
     render_chart_data_table,
     render_dataset_assessment,
+    render_evidence_inspector,
     render_governed_metric,
+    render_job_progress,
     render_semantic_table,
+    render_skeleton,
     render_theme_switcher,
     render_trust_ribbon,
     render_workflow_steps,
@@ -55,6 +59,7 @@ from pulseiq.ui import (
     sidebar_brand,
     value_card,
 )
+from pulseiq.ui_models import JobProgress, JobState
 
 st.set_page_config(
     page_title="PulseIQ Africa",
@@ -96,8 +101,13 @@ def init_state() -> None:
     st.session_state.setdefault("ingestion_metadata", None)
     st.session_state.setdefault("header_mappings", ())
     st.session_state.setdefault("model_bundle", None)
-    st.session_state.setdefault("workspace_page", "Home")
-    st.session_state.setdefault("theme_mode", "System")
+    query_view = str(st.query_params.get("view", "")) if hasattr(st, "query_params") else ""
+    query_theme = str(st.query_params.get("theme", "")) if hasattr(st, "query_params") else ""
+    st.session_state.setdefault("workspace_page", query_view if query_view in NAV_OPTIONS else "Home")
+    st.session_state.setdefault("theme_mode", query_theme if query_theme in THEME_MODES else "System")
+    st.session_state.setdefault("activity_jobs", {})
+    st.session_state.setdefault("model_job_progress", None)
+    st.session_state.setdefault("report_job_progress", None)
 
 
 def set_demo_data() -> None:
@@ -117,6 +127,17 @@ def get_data() -> pd.DataFrame | None:
     return data.copy()
 
 
+def _period_label(data: pd.DataFrame) -> str:
+    """Return a compact, truthful period label for assistant/report context."""
+
+    if "date" not in data.columns:
+        return "Not available"
+    dates = pd.to_datetime(data["date"], errors="coerce").dropna()
+    if dates.empty:
+        return "Not available"
+    return f"{dates.min():%d %b %Y} - {dates.max():%d %b %Y}"
+
+
 def navigate_to(page: str) -> None:
     """Change the keyed workspace selection during a widget callback."""
 
@@ -130,6 +151,60 @@ def navigate_from_mobile() -> None:
     if page in NAV_OPTIONS:
         st.session_state.workspace_page = page
         st.session_state.mobile_navigation_for = page
+
+
+def _set_job(job: JobProgress) -> None:
+    """Store truthful local progress for the Activity Center."""
+
+    jobs = dict(st.session_state.get("activity_jobs", {}))
+    jobs[job.job_id] = job
+    st.session_state.activity_jobs = jobs
+
+
+def _change_job_state(job_id: str, state: JobState) -> None:
+    """Apply a visible local cancel/retry transition without claiming work completed."""
+
+    jobs: dict[str, JobProgress] = dict(st.session_state.get("activity_jobs", {}))
+    job = jobs.get(job_id)
+    if job is None:
+        return
+    updated = JobProgress(
+        job.job_id,
+        job.phase,
+        0 if state is JobState.QUEUED else job.percent,
+        state,
+        heartbeat="local Activity Center action",
+        error=None if state is JobState.QUEUED else job.error,
+        artifact_reference=job.artifact_reference,
+    )
+    jobs[job_id] = updated
+    st.session_state.activity_jobs = jobs
+
+
+def render_activity_center() -> None:
+    """Keep resumable work visible without obscuring the active page."""
+
+    jobs: dict[str, JobProgress] = st.session_state.get("activity_jobs", {})
+    if not jobs:
+        return
+    with st.expander("Activity center", expanded=False):
+        for job in jobs.values():
+            render_job_progress(job)
+            action_left, action_right = st.columns(2)
+            if job.state in {JobState.QUEUED, JobState.RUNNING}:
+                action_left.button(
+                    "Cancel",
+                    key=f"cancel_{job.job_id}",
+                    on_click=_change_job_state,
+                    args=(job.job_id, JobState.CANCELED),
+                )
+            if job.state in {JobState.FAILED, JobState.STALE, JobState.CANCELED}:
+                action_right.button(
+                    "Retry",
+                    key=f"retry_{job.job_id}",
+                    on_click=_change_job_state,
+                    args=(job.job_id, JobState.QUEUED),
+                )
 
 
 def sidebar_nav() -> str:
@@ -147,6 +222,43 @@ def sidebar_nav() -> str:
         st.sidebar.success("Demo dataset loaded.")
     st.sidebar.caption(st.session_state.get("data_source", "No dataset loaded"))
     return page
+
+
+def page_landing() -> None:
+    """Render the public-facing product story without exposing workspace navigation."""
+
+    hero(
+        "Evidence before action.",
+        "PulseIQ Africa helps SME finance and risk teams understand what their data can support before a decision "
+        "is made.",
+    )
+    st.header("A clearer path from source data to governed action")
+    st.write(
+        "Bring a bounded dataset, confirm its meaning, review quality, and explore portfolio and risk evidence "
+        "with the source context still attached."
+    )
+    first, second, third = st.columns(3)
+    with first:
+        value_card("1 · Establish meaning", "Map concepts, units, periods, and currency before metrics appear.")
+    with second:
+        value_card("2 · Prove fitness", "See exactly what is complete, missing, blocked, or only usable with caution.")
+    with third:
+        value_card(
+            "3 · Decide with context",
+            "Inspect the rows, rules, definitions, and limitations behind every signal.",
+        )
+
+    st.header("Built for trust, not black-box certainty")
+    trust_left, trust_right = st.columns(2)
+    with trust_left:
+        st.info("Every measure carries its source, definition, period, quality state, and recovery guidance.")
+    with trust_right:
+        st.warning("Prototype boundary: demo or de-identified data only. No final lending decision is automated.")
+    if st.button("Enter the workspace", type="primary", width="stretch"):
+        if hasattr(st, "query_params"):
+            st.query_params.pop("view", None)
+        st.session_state.workspace_page = "Home"
+        st.rerun()
 
 
 def page_home() -> None:
@@ -176,6 +288,7 @@ def page_home() -> None:
                 set_demo_data()
                 st.rerun()
             b.button("Go to upload page", width="stretch", on_click=navigate_to, args=("Upload Data",))
+            st.markdown("[View the public product story](?view=landing)")
         with c2:
             st.header("What happens next")
             value_card("1 · Establish meaning", "Confirm source fields, concepts, units, period, and currency.")
@@ -183,6 +296,18 @@ def page_home() -> None:
                 "2 · Prove fitness",
                 "See blocking issues, warnings, recovery actions, and exact quality evidence.",
             )
+        st.header("Why teams use PulseIQ")
+        landing_a, landing_b, landing_c = st.columns(3)
+        with landing_a:
+            value_card("Traceable", "Every measure keeps its source, definition, period, and quality status visible.")
+        with landing_b:
+            value_card("Actionable", "Flags and quality issues open into evidence detail instead of a dead-end score.")
+        with landing_c:
+            value_card("Governed", "The prototype never makes a final lending decision or hides uncertainty.")
+        st.caption(
+            "Prototype workspace · demo data only · production identity, tenancy, and worker controls are required "
+            "before real customer data."
+        )
         return
 
     anomalies = detect_anomalies(data) if assessment.can(DatasetCapability.RISK_RULE_EVALUATION) else None
@@ -259,13 +384,28 @@ def page_upload() -> None:
         st.header("Add an evidence source")
         c1, c2 = st.columns([0.62, 0.38])
         with c1:
-            uploaded = st.file_uploader("Upload CSV", type=["csv"])
+            safe_data_confirmation = st.checkbox(
+                "I confirm this CSV is synthetic or de-identified",
+                help="The prototype must not receive real customer personal data.",
+            )
+            uploaded = st.file_uploader("Upload CSV", type=["csv"], disabled=not safe_data_confirmation)
+            if not safe_data_confirmation:
+                st.info("Upload is disabled until the prototype data-safety confirmation is selected.")
             if uploaded is not None:
+                intake_skeleton = st.empty()
                 try:
-                    ingested = ingest_csv(uploaded.getvalue(), filename=uploaded.name)
+                    render_skeleton("Validating uploaded CSV", target=intake_skeleton)
+                    ingested = ingest_csv(
+                        uploaded.getvalue(),
+                        filename=uploaded.name,
+                        privacy_policy=DEMO_PRIVACY_POLICY,
+                    )
                     current_metadata = st.session_state.get("ingestion_metadata")
                     current_sha = current_metadata.sha256 if current_metadata is not None else None
                     if ingested.metadata.sha256 != current_sha:
+                        intake_job = JobProgress("data-intake", "Validate and load source", 100, JobState.SUCCEEDED)
+                        st.session_state.intake_job_progress = intake_job
+                        _set_job(intake_job)
                         st.session_state.data = ingested.dataframe
                         st.session_state.data_source = ingested.metadata.filename
                         st.session_state.data_currency = None
@@ -277,7 +417,12 @@ def page_upload() -> None:
                 except UploadRejected as exc:  # pragma: no cover - Streamlit upload interaction
                     st.error(f"Upload blocked [{exc.code.value}]: {exc.user_message}")
                     st.info(exc.recovery)
+                finally:
+                    intake_skeleton.empty()
             if st.button("Use sample business data", type="primary", on_click=set_demo_data):
+                intake_job = JobProgress("data-intake", "Load synthetic demo", 100, JobState.SUCCEEDED)
+                st.session_state.intake_job_progress = intake_job
+                _set_job(intake_job)
                 st.success("Demo dataset loaded.")
         with c2:
             st.markdown("**What PulseIQ checks first**")
@@ -301,6 +446,9 @@ def page_upload() -> None:
         )
         require_dataset_message()
         return
+
+    if st.session_state.get("intake_job_progress") is not None:
+        render_job_progress(st.session_state.intake_job_progress)
 
     metadata = st.session_state.get("ingestion_metadata")
     header_mappings = st.session_state.get("header_mappings", ())
@@ -391,6 +539,22 @@ def page_upload() -> None:
     m4.metric("Duplicate rows", f"{int(data.duplicated().sum()):,}")
     m5.metric("Quality score", f"{assessment.composite_score:.1f}%")
     render_dataset_assessment(assessment)
+    dimension_frame = pd.DataFrame(
+        [{"Dimension": item.dimension.value.title(), "Score": round(item.score, 1)} for item in assessment.dimensions]
+    )
+    if not dimension_frame.empty:
+        st.subheader("Quality signal")
+        quality_fig = px.bar(
+            dimension_frame.sort_values("Score"),
+            x="Score",
+            y="Dimension",
+            orientation="h",
+            range_x=[0, 100],
+            title="Quality dimensions at a glance",
+        )
+        quality_fig.update_layout(xaxis_title="Score (%)", yaxis_title="Dimension", showlegend=False)
+        st.plotly_chart(quality_fig, width="stretch")
+        render_chart_data_table("Quality dimensions at a glance", dimension_frame)
     if assessment.issues:
         issue_export = pd.DataFrame(
             [
@@ -410,9 +574,26 @@ def page_upload() -> None:
         )
         st.download_button(
             "Download validation issues CSV",
-            data=safe_csv_bytes(issue_export),
+            data=safe_csv_bytes(issue_export, privacy_policy=DEMO_PRIVACY_POLICY),
             file_name="pulseiq_validation_issues.csv",
             mime="text/csv",
+        )
+        st.subheader("Inspect a validation issue")
+        render_evidence_inspector(
+            "Validation issue",
+            issue_export,
+            key="quality_issue_inspector",
+            id_column="issue_code",
+            label_columns=("severity", "dimension"),
+            detail_columns=(
+                "severity",
+                "dimension",
+                "column",
+                "affected_count",
+                "message",
+                "recovery",
+                "definition_version",
+            ),
         )
     st.header("Data preview")
     st.dataframe(data.head(50), width="stretch", height=360)
@@ -538,6 +719,27 @@ def page_dashboard() -> None:
         for insight in build_metric_insights(metrics):
             st.write(f"- {insight}")
 
+    portfolio_identifier = "transaction_id" if "transaction_id" in portfolio.columns else "customer_id"
+    st.subheader("Inspect portfolio evidence")
+    st.caption("Select a source record to verify the measures and risk context behind this filtered scope.")
+    render_evidence_inspector(
+        "Portfolio record",
+        portfolio,
+        key="portfolio_evidence_inspector",
+        id_column=portfolio_identifier,
+        label_columns=("customer_id", "segment", "region"),
+        detail_columns=(
+            "customer_id",
+            "date",
+            "segment",
+            "region",
+            "business_type",
+            "transaction_amount",
+            "loan_amount",
+            "defaulted",
+        ),
+    )
+
     with st.expander("Explore distributions and segment comparisons"):
         c1, c2 = st.columns(2)
         with c1:
@@ -592,6 +794,10 @@ def page_dashboard() -> None:
 
 def page_prediction() -> None:
     st.title("Model exploration")
+    st.caption(
+        "Explore a bounded demonstration model with explicit eligibility, provenance, and review limits. "
+        "This page never makes or automates a final lending decision."
+    )
     data = get_data()
     if data is None:
         require_dataset_message()
@@ -601,7 +807,38 @@ def page_prediction() -> None:
     if not require_dataset_capability(assessment, DatasetCapability.MODEL_EXPLORATION):
         return
 
+    render_trust_ribbon(
+        assessment,
+        source=st.session_state.get("data_source", "Active dataset"),
+    )
+
     eligibility = assess_model_eligibility(data)
+    eligibility_ready = eligibility.status is not EligibilityStatus.BLOCKED
+    bundle: ModelBundle | None = st.session_state.get("model_bundle")
+    render_workflow_steps(
+        "Model exploration workflow",
+        "Eligibility and provenance stay visible before any score is interpreted.",
+        (
+            ("1 · Bind snapshot", "Source and quality recorded", "is-ready"),
+            (
+                "2 · Check target",
+                "Eligible to train" if eligibility_ready else "Resolve eligibility issues",
+                "is-current" if eligibility_ready else "is-blocked",
+            ),
+            (
+                "3 · Validate model",
+                f"{bundle.name} holdout ready" if bundle else "Train candidates",
+                "is-ready" if bundle else "is-pending",
+            ),
+            (
+                "4 · Review score",
+                "Human review required" if bundle else "Pending model run",
+                "is-warning" if bundle else "is-pending",
+            ),
+        ),
+    )
+
+    st.header("Eligibility evidence")
     e1, e2, e3 = st.columns(3)
     e1.metric("Eligible outcome rows", f"{eligibility.eligible_rows:,}")
     e2.metric("Excluded outcome rows", f"{eligibility.excluded_target_rows:,}")
@@ -640,13 +877,34 @@ def page_prediction() -> None:
         return
 
     if st.button("Train prediction models", type="primary"):
+        running = JobProgress("model-training", "Train candidates", 15, JobState.RUNNING, "local callback started")
+        st.session_state.model_job_progress = running
+        _set_job(running)
+        skeleton_slot = st.empty()
         with st.spinner("Training Logistic Regression, Random Forest, and Decision Tree models..."):
+            render_skeleton("Training prediction models", target=skeleton_slot)
             try:
                 st.session_state.model_bundle = train_models(data)
+                completed = JobProgress(
+                    "model-training",
+                    "Validate holdout",
+                    100,
+                    JobState.SUCCEEDED,
+                    "local callback completed",
+                )
+                st.session_state.model_job_progress = completed
+                _set_job(completed)
             except ModelEligibilityError as exc:
+                failed = JobProgress("model-training", "Train candidates", 15, JobState.FAILED, error=str(exc))
+                st.session_state.model_job_progress = failed
+                _set_job(failed)
                 st.error(str(exc))
+            finally:
+                skeleton_slot.empty()
 
-    bundle: ModelBundle | None = st.session_state.get("model_bundle")
+    if st.session_state.get("model_job_progress") is not None:
+        render_job_progress(st.session_state.model_job_progress)
+
     if bundle is None:
         st.info("Train the models to view evaluation metrics and score a customer.")
         return
@@ -689,6 +947,14 @@ def page_prediction() -> None:
         columns=["Predicted repaid", "Predicted defaulted"],
     )
     render_semantic_table("Final holdout confusion matrix", matrix.reset_index(names="Actual outcome"))
+    matrix_fig = px.imshow(
+        matrix,
+        text_auto=True,
+        color_continuous_scale="Blues",
+        title="Holdout outcomes by predicted class",
+        labels={"x": "Predicted outcome", "y": "Actual outcome", "color": "Records"},
+    )
+    st.plotly_chart(matrix_fig, width="stretch")
 
     st.header("Score a customer")
     with st.form("score_customer_form"):
@@ -721,6 +987,27 @@ def page_prediction() -> None:
         r3.metric("Explanation", result["explanation_status"])
         st.warning(result["score_semantics"])
         st.info(result["explanation"])
+        score_frame = pd.DataFrame(
+            [
+                {
+                    "score_id": f"{bundle.provenance.run_id}:manual",
+                    "model_run": bundle.provenance.run_id,
+                    "routing": result["routing"],
+                    "model_score_percent": result["model_score_percent"],
+                    "explanation_status": result["explanation_status"],
+                    "score_semantics": result["score_semantics"],
+                }
+            ]
+        )
+        st.subheader("Inspect score evidence")
+        render_evidence_inspector(
+            "Model score",
+            score_frame,
+            key="model_score_inspector",
+            id_column="score_id",
+            label_columns=("routing", "model_score_percent"),
+            detail_columns=("model_run", "routing", "model_score_percent", "explanation_status", "score_semantics"),
+        )
 
 
 def page_anomaly() -> None:
@@ -841,9 +1128,38 @@ def page_anomaly() -> None:
         st.info("No flagged records match these filters. Broaden the priority, rule, or identifier search.")
     else:
         st.dataframe(review_rows[display_cols].head(250), width="stretch", height=430)
+        st.subheader("Inspect flagged evidence")
+        identifier_column = "transaction_id" if "transaction_id" in review_rows.columns else "customer_id"
+        rule_status_columns = tuple(
+            definition.status_column
+            for definition in RULE_DEFINITIONS
+            if definition.status_column in review_rows.columns
+        )
+        render_evidence_inspector(
+            "Flagged record",
+            review_rows,
+            key="risk_evidence_inspector",
+            id_column=identifier_column,
+            label_columns=("customer_id", "risk_level", "anomaly_score"),
+            detail_columns=(
+                "customer_id",
+                "date",
+                "transaction_amount",
+                "loan_amount",
+                "income",
+                "risk_level",
+                "anomaly_score",
+                "rule_version",
+                "rules_evaluated_count",
+                "rules_not_evaluated_count",
+                "not_evaluated_rule_ids",
+                *rule_status_columns,
+                "anomaly_notes",
+            ),
+        )
     st.download_button(
         "Download filtered review queue CSV",
-        data=safe_csv_bytes(review_rows),
+        data=safe_csv_bytes(review_rows, privacy_policy=DEMO_PRIVACY_POLICY),
         file_name="pulseiq_filtered_review_queue.csv",
         mime="text/csv",
     )
@@ -890,19 +1206,33 @@ def page_report() -> None:
         )
 
     start = time.perf_counter()
-    pdf = build_report_pdf(
-        data,
-        metrics,
-        anomalies,
-        insights,
-        model_name=bundle.name if bundle else None,
-        model_metrics=bundle.metrics if bundle else None,
-        model_run_id=bundle.provenance.run_id if bundle else None,
-        model_split_strategy=bundle.provenance.split_strategy if bundle else None,
-        model_probability_status=bundle.provenance.probability_status if bundle else None,
-    )
+    report_skeleton = st.empty()
+    render_skeleton("Preparing report evidence", target=report_skeleton)
+    try:
+        pdf = build_report_pdf(
+            data,
+            metrics,
+            anomalies,
+            insights,
+            model_name=bundle.name if bundle else None,
+            model_metrics=bundle.metrics if bundle else None,
+            model_run_id=bundle.provenance.run_id if bundle else None,
+            model_split_strategy=bundle.provenance.split_strategy if bundle else None,
+            model_probability_status=bundle.provenance.probability_status if bundle else None,
+        )
+        html = build_report_html(metrics, insights, anomalies)
+    finally:
+        report_skeleton.empty()
     elapsed = time.perf_counter() - start
-    html = build_report_html(metrics, insights, anomalies)
+    report_progress = JobProgress(
+        "report-package",
+        "Prepare evidence artifacts",
+        100,
+        JobState.SUCCEEDED,
+        "HTML and PDF callbacks completed",
+    )
+    st.session_state.report_job_progress = report_progress
+    _set_job(report_progress)
 
     governed_metric_ids = (
         MetricId.TRANSACTION_VALUE,
@@ -940,6 +1270,7 @@ def page_report() -> None:
             ("Download evidence", "Ready · accessible HTML and PDF are prepared.", "is-ready"),
         ),
     )
+    render_job_progress(report_progress)
 
     st.header("Report preview")
     context_column, insight_column = st.columns([0.85, 1.15])
@@ -968,6 +1299,39 @@ def page_report() -> None:
         for insight in insights:
             st.write(f"- {insight}")
 
+    evidence_status = pd.DataFrame(
+        [
+            {"Evidence": "Source snapshot", "Status": "Ready"},
+            {"Evidence": "Definitions", "Status": "Warning" if unavailable_count else "Ready"},
+            {"Evidence": "Rule provenance", "Status": "Ready" if not anomalies.empty else "Unavailable"},
+            {"Evidence": "Model provenance", "Status": "Ready" if bundle is not None else "Not included"},
+        ]
+    )
+    evidence_status["Status score"] = evidence_status["Status"].map(
+        {"Ready": 1, "Warning": 0.7, "Unavailable": 0.25, "Not included": 0.45}
+    )
+    st.subheader("Evidence completeness")
+    evidence_fig = px.bar(
+        evidence_status,
+        x="Evidence",
+        y="Status score",
+        color="Status",
+        title="Report evidence status",
+    )
+    # The semantic table remains the authoritative representation for assistive technology and export.
+    st.plotly_chart(evidence_fig, width="stretch")
+    render_chart_data_table("Report evidence status", evidence_status)
+    st.subheader("Inspect source evidence")
+    report_identifier = "transaction_id" if "transaction_id" in data.columns else "customer_id"
+    render_evidence_inspector(
+        "Report source record",
+        data,
+        key="report_evidence_inspector",
+        id_column=report_identifier,
+        label_columns=("customer_id", "date"),
+        detail_columns=("customer_id", "date", "transaction_amount", "loan_amount", "defaulted", "segment", "region"),
+    )
+
     st.header("Download evidence package")
     with st.container(key="report_delivery"):
         d1, d2, d3 = st.columns([0.42, 1, 1])
@@ -995,6 +1359,10 @@ def page_report() -> None:
 
 def page_assistant() -> None:
     st.title("Insight Assistant")
+    st.caption(
+        "Ask about the active dataset. Answers use deterministic governed metrics and versioned rule evidence; "
+        "they are not a substitute for an authorized human decision."
+    )
     data = get_data()
     if data is None:
         require_dataset_message()
@@ -1010,6 +1378,21 @@ def page_assistant() -> None:
     )
     bundle: ModelBundle | None = st.session_state.get("model_bundle")
 
+    render_trust_ribbon(
+        assessment,
+        source=st.session_state.get("data_source", "Active dataset"),
+    )
+    render_workflow_steps(
+        "Assistant answer path",
+        "Every response is anchored to the active snapshot and can be checked against the evidence below.",
+        (
+            ("1 · Bind snapshot", "Source and period identified", "is-ready"),
+            ("2 · Resolve metrics", "Definitions and status loaded", "is-ready"),
+            ("3 · Answer", "Deterministic rule path", "is-current"),
+            ("4 · Verify", "Inspect context and export", "is-warning"),
+        ),
+    )
+
     quick = st.selectbox(
         "Question",
         [
@@ -1023,7 +1406,38 @@ def page_assistant() -> None:
     )
     custom = st.text_input("Ask your own question")
     question = custom or quick
-    st.write(answer_question(question, data, metrics, anomalies, bundle.metrics if bundle else None))
+    answer = answer_question(question, data, metrics, anomalies, bundle.metrics if bundle else None)
+    st.header("Answer")
+    st.info(answer)
+    with st.expander("Evidence context"):
+        render_semantic_table(
+            "Assistant evidence context",
+            pd.DataFrame(
+                [
+                    {"Field": "Source", "Value": st.session_state.get("data_source", "Active dataset")},
+                    {"Field": "Rows", "Value": f"{len(data):,}"},
+                    {"Field": "Period", "Value": _period_label(data)},
+                    {"Field": "Filters", "Value": "None beyond the active dataset"},
+                    {
+                        "Field": "Rule evidence",
+                        "Value": RULESET_VERSION if not anomalies.empty else "Not evaluated",
+                    },
+                    {"Field": "Model evidence", "Value": bundle.name if bundle else "Not trained"},
+                ]
+            ),
+        )
+    if not anomalies.empty:
+        st.subheader("Inspect assistant evidence")
+        assistant_identifier = "transaction_id" if "transaction_id" in anomalies.columns else "customer_id"
+        render_evidence_inspector(
+            "Assistant source record",
+            anomalies[anomalies["is_suspicious"]],
+            key="assistant_evidence_inspector",
+            id_column=assistant_identifier,
+            label_columns=("risk_level", "anomaly_score"),
+            detail_columns=("customer_id", "date", "risk_level", "anomaly_score", "rule_version", "anomaly_notes"),
+        )
+    st.caption("Use the Risk review, Portfolio, or Reports pages to inspect the underlying rows and definitions.")
 
 
 def page_about() -> None:
@@ -1060,8 +1474,16 @@ def main() -> None:
     apply_page_style(theme_mode)
     render_theme_switcher()
     st.markdown('<div id="main-content" tabindex="-1"></div>', unsafe_allow_html=True)
+    if hasattr(st, "query_params"):
+        st.query_params["theme"] = theme_mode
+    if str(st.query_params.get("view", "")).lower() == "landing":
+        page_landing()
+        return
     page = sidebar_nav()
+    if hasattr(st, "query_params"):
+        st.query_params["view"] = page
     mobile_navigation(page, on_change=navigate_from_mobile)
+    render_activity_center()
     pages = {
         "Home": page_home,
         "Upload Data": page_upload,

@@ -194,3 +194,88 @@ Status: **implemented and browser-verified for the Streamlit prototype** on 2026
 - Added Priority, Triggered rule, and customer/transaction filters. Filters change only the review subset, announce the matching count, preserve source rule output, and export the filtered evidence.
 - Browser interaction proved the High filter narrows 735 flagged demo records to the expected two. Geometry at 320, 375, and 1440 px found no document-level horizontal overflow; the intake stages and risk filters stack in source order on phone.
 - Rendered inspection caught and fixed an H1→H3 heading skip and a one-render stale sidebar source. Focused UI coverage is 17 passing tests. The full locally available gate passes with 261 tests and 23 expected PostgreSQL/Redis environment skips, plus Ruff, formatting, mypy across 64 source files, lock integrity, Bandit, and the representative 5,000-row smoke check.
+
+## Cycle 12 — Portfolio evidence and report delivery
+
+Status: **implemented and browser-verified for the Streamlit prototype** on 2026-08-27. Drill-down, saved views, scheduled delivery, and authenticated report history remain later production workflows.
+
+- Reframed Portfolio as an evidence ledger: Segment, Region, and Business type controls narrow the analytical view while preserving the immutable source snapshot and announcing the exact matching record count.
+- Separated four decision measures from four secondary governed metrics. Missing dependencies remain explicitly unavailable, and metric definitions stay adjacent in an expandable operational evidence section.
+- Kept the primary comparison readable: monthly transaction trend plus sorted risk-priority bars, each paired with a semantic table alternative and a concise evidence-led observation.
+- Reframed Reports as a staged delivery workflow: bind source snapshot, resolve definitions, review disclosures, then download. The preview exposes source, rows, quality, rule coverage, model status, and observations before any export action.
+- Made accessible HTML the primary report artifact and tagged PDF the companion download; both remain available when governed metrics are unavailable.
+- Browser interaction proved the Agriculture scope narrows 5,000 source records to 715 and recomputes the visible customer metric to 643. Desktop and phone inspection found zero document-level horizontal overflow, sequential H1→H2 headings, stacked report context/insights/delivery regions, and 44 px-or-taller controls.
+- Focused UI coverage is now 18 passing checks; the subsequent model/assistant slice and final full gate are recorded in Cycle 13.
+
+## Cycle 13 — Model exploration and assistant traceability
+
+Status: **implemented and browser-verified for the Streamlit prototype** on 2026-08-27. Authenticated model approval, calibration, deployment, and conversational feedback storage remain later production workflows.
+
+- Added a model-exploration workflow that binds the active snapshot, checks target/feature eligibility, validates a candidate holdout, and only then permits scoring.
+- Kept the demonstration-model boundary explicit in the page copy and result state: unapproved, uncalibrated, no validated local explanation, and human review required for every score.
+- Added the workspace trust ribbon and ordered Model exploration workflow to the existing eligibility evidence, provenance, confusion matrix, and score form.
+- Added an Assistant answer path with deterministic metric/rule resolution and an expandable evidence context containing source, row count, period, filters, rule version, and model status.
+- Browser inspection at 375 px found no horizontal overflow; model workflow stages and assistant evidence context reflow in source order with H1→H2 headings preserved.
+- Focused UI coverage is now 19 passing checks. The no-coverage full suite remains 263 passed and 23 expected PostgreSQL/Redis environment skips; the configured coverage run executes all 263 but reports 81.51% because those service-backed modules are skipped. Cycle 8 retains the independent 90.06% disposable-service coverage proof.
+
+## Cycle 14 — Theme contrast and premium surface pass
+
+Status: **implemented and browser-verified for the Streamlit prototype** on 2026-08-27. Production-shell token extraction and visual regression snapshots remain follow-up work.
+
+- Corrected the actual Streamlit React-Aria control selectors so select labels, metric labels, combobox values, dropdown arrows, number-input buttons, expanders, and theme segments inherit the active semantic foreground/background tokens.
+- Added dark-aware popover/listbox/option states and explicit hover/focus treatments for selection controls; light and dark modes now keep text and control surfaces in the same contrast family.
+- Added restrained glass treatment with `backdrop-filter`, tinted borders, and solid-surface fallback for workflow, filter, report, theme, and mobile-navigation surfaces. Metric cards and dense evidence tables remain opaque for maximum legibility.
+- Browser checks at 375 px and desktop confirmed zero horizontal overflow, readable dark labels/inputs, themed segmented controls, and preserved H1→H2 hierarchy.
+- UI coverage is now 20 passing checks; scoped Ruff/format and mypy remain clean. The app is launched at `http://127.0.0.1:8501`.
+
+## Cycle 15 — Responsive evidence inspectors, visual status, and activity progress
+
+Status: **implemented and browser-verified for the Streamlit prototype** on 2026-08-27. Durable worker-backed progress, authenticated detail routes, and production tenant controls remain production-shell work.
+
+- Added typed `EvidenceItem`, `InspectorState`, `ChartViewModel`, and `JobProgress` contracts in `src/pulseiq/ui_models.py`.
+- Added one escaped, keyboard-operable responsive inspector helper. Risk flags, validation issues, portfolio records, model scores, report source rows, and Assistant evidence can now be selected and inspected without losing the active analytical scope.
+- Added quality-dimension and report-evidence status visuals with semantic table alternatives, plus a holdout confusion-matrix heatmap for model exploration.
+- Added truthful local job status for intake, model training, and report packaging with an Activity Center. Status copy is only marked succeeded after the underlying callback returns.
+- Fixed compact desktop workflow cards to reflow into two columns, removed workflow label truncation, reserved mobile safe-area space, and made the mobile dock an opaque high-contrast surface.
+- Expanded the no-data Home state into a hybrid landing/workspace entry with explicit traceable, actionable, governed value propositions and a demo-data production boundary.
+- Browser checks confirmed the Report inspector, report progress, evidence status chart, four-column wide workflow, two-column 1024px workflow, dark input contrast, and 375px zero document overflow. The full no-coverage suite passes with 267 tests and 23 expected service-environment skips.
+
+## Cycle 16 — Public landing, export parity, and final interaction audit
+
+Status: **implemented and browser-verified for the Streamlit prototype** on 2026-08-27. Production authentication, durable workers, tenant isolation, and deployed observability remain release gates.
+
+- Added a public `?view=landing` route with a concise product thesis, evidence-first workflow, trust boundary, and workspace CTA; the authenticated-style Home page remains the analyst overview.
+- Persisted theme and page state in shareable query parameters (`theme` and `view`) while preserving System/Light/Dark semantic rendering.
+- Upgraded every chart/table pair with a safe CSV export and sanitized filenames, including rule titles that contain punctuation or slashes.
+- Converted the shared evidence inspector into an adjacent selector/detail layout for desktop/tablet and a naturally stacked layout on mobile.
+- Added an explicit synthetic/de-identified confirmation before CSV uploads can be processed; demo loading remains available without real-data access.
+- Added skeleton placeholders around upload validation, report preparation, and model training; placeholders clear after callbacks complete and Activity Center statuses remain truthful.
+- Live checks confirmed landing entry/exit, dark-theme persistence, Report evidence inspector, chart export control, 1280px/1024px workflow reflow, 375px inspector stacking, opaque mobile navigation, and no document-level horizontal overflow.
+- Full no-coverage suite now passes with 268 tests and 23 expected service-environment skips; Ruff, formatting, mypy, compile, smoke, and secret-pattern checks pass.
+- Added Activity Center cancel/retry transitions that remain explicit (`canceled`/`queued`) and never claim a worker succeeded without a callback result.
+- Added inspector pagination at 250 records per page and passed the full filtered datasets into Risk, Portfolio, Report, and Assistant inspectors; a 735-record risk queue is now reachable through three selectable pages.
+
+## Cycle 17 — Enforced privacy and production edge-security seams
+
+Status: **implemented and locally verified at the framework-neutral boundary** on 2026-08-27. Managed OIDC, API composition, deployed shared services, and external acceptance remain production gates.
+
+- Replaced the upload checkbox as the only privacy control with bounded content enforcement: demo intake rejects restricted identifier columns and high-confidence email, phone, and IBAN patterns using safe codes that never echo matched values.
+- Added export minimization that drops restricted direct-identifier fields, redacts detected contact/account cells, preserves pseudonymous operational IDs, and leaves the source dataframe unchanged.
+- Added an HMAC-authenticated `__Host-pulseiq_session` web codec with Secure/HttpOnly/SameSite=Strict flags, 30-minute maximum lifetime, exact payload validation, independent CSRF key, exact-origin mutation checks, verification-key rotation, safe logout expiration, and authoritative session-registry composition.
+- Added exact-origin credentialed CORS and nonce-based CSP/HSTS/no-store/frame/content/referrer/permissions headers for the future production API edge.
+- Added privacy-preserving named rate-limit policies with HMAC-derived subjects/request IDs, deterministic local coverage, atomic Redis sliding windows, reset-after-success support, and fail-closed backend-unavailable behavior.
+- Added `scripts/verify_production_config.py`, which refuses production startup without managed OIDC settings, exact HTTPS origins, independent session/CSRF/rate-limit keys, verified PostgreSQL/Redis TLS, quarantine/KMS/scanner configuration, audit checkpointing, privacy/security approvals, and restore-drill evidence references.
+- Focused branch coverage for the new privacy, browser-session, HTTP-edge, rate-limit, and production-configuration modules is 97.70% (96 passing tests). The complete locally available suite passes with 349 tests and 23 expected PostgreSQL/Redis/S3 environment skips; Ruff, formatting, strict mypy, compile, smoke, Bandit, dependency audit, and fail-closed secret scanning pass.
+- Live browser verification on the restarted build confirmed the disabled-until-confirmed upload boundary, demo-only source labeling, Report delivery/progress/inspector state, and zero document overflow at both 1440px and 375px.
+- These controls materially narrow SEC-001/004/005/008 but do not close the release gates until they are composed into an authenticated API and operated in approved infrastructure with negative authorization, restore, incident, privacy, and penetration-test evidence.
+
+## Cycle 18 — OIDC authorization-code and session orchestration
+
+Status: **implemented and locally verified at the provider-neutral boundary** on 2026-08-27. The managed-provider code exchange/JWKS verifier and deployed API composition remain production gates.
+
+- Added immutable OIDC provider, transaction, verified-identity, authentication-event, start, and result contracts with bounded URLs, scopes, TTLs, authentication age, session lifetime, UUIDs, entropy, and lifecycle invariants.
+- Login start now generates cryptographically random state, nonce, and PKCE verifier, persists only the state digest, builds a code-flow/S256 authorization URL, and excludes nonce/verifier material from representations.
+- Callback completion uses a cryptographic-verifier port, revalidates exact issuer, client audience, nonce, expiry, authentication age, and MFA, then resolves only pre-provisioned issuer/subject links.
+- Unknown, expired, failed, and replayed state share the same safe error. Provider/claim/mapping failures consume the attempt and append a PII-free reason event; authorization codes and provider secrets are never persisted or logged.
+- Successful completion atomically consumes the transaction, creates a short-lived authoritative session and authentication event, and issues the hardened secure-cookie/CSRF envelope. Session expiry is capped by both the local 30-minute limit and verified identity-token expiry.
+- OIDC-focused branch coverage is 95.86%; combined edge-security focused coverage is 96.57% across 139 tests. The complete locally available suite now passes with 392 tests and 23 expected service-environment skips; the rerun of Bandit and secret scanning remains clean. The canonical all-module coverage run executes every available test but records 84.97% locally because PostgreSQL/Redis/S3 adapter paths remain skipped without those services, so the 90% release threshold still requires the service-backed CI job rather than a local waiver.

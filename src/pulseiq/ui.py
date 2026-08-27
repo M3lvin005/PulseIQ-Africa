@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from html import escape
+from typing import Any
 
 import pandas as pd
 import streamlit as st
 
 from .analytics import format_currency
 from .datasets import AssessmentStatus, DatasetAssessment, DatasetCapability, IssueSeverity
+from .exports import safe_csv_bytes
 from .portfolio_metrics import MetricStatus, MetricValue
+from .privacy import DEMO_PRIVACY_POLICY
+from .ui_models import ChartViewModel, EvidenceItem, InspectorState, JobProgress
 
 THEME_MODES = ("System", "Light", "Dark")
 
@@ -39,6 +44,8 @@ LIGHT_THEME_TOKENS = """
         --pulse-table-head: #EEF1FF;
         --pulse-hover: #F1F4FF;
         --pulse-overlay: rgba(255, 255, 255, 0.96);
+        --pulse-glass: rgba(255, 255, 255, 0.78);
+        --pulse-glass-border: rgba(255, 255, 255, 0.72);
         --pulse-shadow-sm: 0 5px 18px rgba(11, 23, 57, 0.035);
         --pulse-shadow-md: 0 10px 30px rgba(11, 23, 57, 0.06);
         --pulse-shadow-float: 0 12px 34px rgba(11, 23, 57, 0.18);
@@ -78,6 +85,8 @@ DARK_THEME_TOKENS = """
         --pulse-table-head: #1B2A48;
         --pulse-hover: #182746;
         --pulse-overlay: rgba(17, 27, 45, 0.97);
+        --pulse-glass: rgba(22, 34, 56, 0.78);
+        --pulse-glass-border: rgba(166, 187, 226, 0.22);
         --pulse-shadow-sm: 0 5px 18px rgba(0, 0, 0, 0.18);
         --pulse-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.26);
         --pulse-shadow-float: 0 12px 34px rgba(0, 0, 0, 0.42);
@@ -135,6 +144,9 @@ __SYSTEM_THEME__
     [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
         gap: var(--pulse-space-5);
     }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        min-width: 0;
+    }
     [data-testid="stColumn"] > [data-testid="stVerticalBlock"] {
         gap: var(--pulse-space-4);
     }
@@ -173,6 +185,13 @@ __SYSTEM_THEME__
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
+    }
+    [data-testid="stWidgetLabel"] p {
+        color: var(--pulse-muted) !important;
+    }
+    [data-testid="stWidgetLabel"],
+    [data-testid="stMetricLabel"] {
+        color: var(--pulse-muted) !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] {
         gap: var(--pulse-space-1);
@@ -274,8 +293,12 @@ __SYSTEM_THEME__
         padding: var(--pulse-space-4);
         border: 1px solid var(--pulse-border);
         border-radius: var(--pulse-radius-lg);
-        background: var(--pulse-surface);
+        background: var(--pulse-glass);
+        background: color-mix(in srgb, var(--pulse-glass) 88%, var(--pulse-surface));
+        border-color: var(--pulse-glass-border);
         box-shadow: var(--pulse-shadow-sm);
+        backdrop-filter: blur(16px) saturate(125%);
+        -webkit-backdrop-filter: blur(16px) saturate(125%);
     }
     .pulse-workflow-head {
         display: flex;
@@ -353,12 +376,12 @@ __SYSTEM_THEME__
     }
     .pulse-workflow-label {
         display: block;
-        overflow: hidden;
+        min-width: 0;
+        overflow-wrap: anywhere;
         color: var(--pulse-heading);
         font-size: 0.84rem;
         font-weight: 750;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.25;
     }
     .pulse-workflow-value {
         display: block;
@@ -377,8 +400,12 @@ __SYSTEM_THEME__
         padding: var(--pulse-space-4);
         border: 1px solid var(--pulse-border);
         border-radius: var(--pulse-radius-lg);
-        background: var(--pulse-surface);
+        background: var(--pulse-glass);
+        background: color-mix(in srgb, var(--pulse-glass) 88%, var(--pulse-surface));
+        border-color: var(--pulse-glass-border);
         box-shadow: var(--pulse-shadow-sm);
+        backdrop-filter: blur(16px) saturate(125%);
+        -webkit-backdrop-filter: blur(16px) saturate(125%);
     }
     .st-key-data_intake [data-testid="stFileUploaderDropzone"] {
         min-height: 112px;
@@ -496,12 +523,12 @@ __SYSTEM_THEME__
         min-height: 112px;
         box-shadow: var(--pulse-shadow-sm);
     }
-    div[data-testid="stMetricLabel"] p {
-        color: var(--pulse-muted);
+    [data-testid="stMetricLabel"] p {
+        color: var(--pulse-muted) !important;
         font-size: 0.82rem;
     }
-    div[data-testid="stMetricValue"] {
-        color: var(--pulse-heading);
+    [data-testid="stMetricValue"] {
+        color: var(--pulse-heading) !important;
         font-size: clamp(1.45rem, 2vw, 1.85rem);
         font-variant-numeric: tabular-nums;
         font-weight: 750;
@@ -563,6 +590,39 @@ __SYSTEM_THEME__
         background: var(--pulse-field) !important;
         border-color: var(--pulse-border-strong) !important;
     }
+    .react-aria-ComboBox {
+        border: 1px solid var(--pulse-border-strong);
+        border-radius: var(--pulse-radius-md);
+        background: var(--pulse-field);
+    }
+    .react-aria-ComboBox input[role="combobox"],
+    .react-aria-ComboBox button,
+    [data-testid="stNumberInput"] button {
+        color: var(--pulse-text) !important;
+        background: var(--pulse-field) !important;
+        border-color: var(--pulse-border-strong) !important;
+    }
+    [data-testid="stNumberInput"] button:hover,
+    .react-aria-ComboBox button:hover {
+        color: var(--pulse-accent-text) !important;
+        background: var(--pulse-hover) !important;
+    }
+    [data-baseweb="popover"],
+    [role="listbox"] {
+        color: var(--pulse-text) !important;
+        background: var(--pulse-surface-raised) !important;
+        border: 1px solid var(--pulse-border-strong) !important;
+        box-shadow: var(--pulse-shadow-float);
+    }
+    [role="option"] {
+        color: var(--pulse-text) !important;
+        background: transparent !important;
+    }
+    [role="option"][aria-selected="true"],
+    [role="option"]:hover {
+        color: var(--pulse-heading) !important;
+        background: var(--pulse-hover) !important;
+    }
     input, textarea, select {
         color: var(--pulse-text) !important;
         background: var(--pulse-field) !important;
@@ -579,6 +639,55 @@ __SYSTEM_THEME__
         background: var(--pulse-surface);
         border-color: var(--pulse-border);
         border-radius: var(--pulse-radius-md);
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary * {
+        color: var(--pulse-text) !important;
+    }
+    [data-testid="stMetricLabel"] * {
+        color: var(--pulse-muted) !important;
+    }
+    .st-key-theme_switcher,
+    .st-key-mobile_navigation {
+        background: var(--pulse-glass);
+        background: color-mix(in srgb, var(--pulse-glass) 90%, var(--pulse-surface));
+        border-color: var(--pulse-glass-border);
+        backdrop-filter: blur(16px) saturate(130%);
+        -webkit-backdrop-filter: blur(16px) saturate(130%);
+    }
+    .st-key-theme_switcher button[data-variant="segmented_control"] {
+        color: var(--pulse-text) !important;
+        background: var(--pulse-field) !important;
+        border-color: var(--pulse-border) !important;
+    }
+    .st-key-theme_switcher button[data-variant="segmented_control"] * {
+        color: inherit !important;
+    }
+    .st-key-theme_switcher button[data-variant="segmented_control"][data-selected="true"] {
+        color: var(--pulse-accent-text) !important;
+        background: var(--pulse-accent-soft) !important;
+        border-color: var(--pulse-accent) !important;
+    }
+    .st-key-theme_switcher button[data-variant="segmented_control"]:hover,
+    .st-key-theme_switcher button[data-variant="segmented_control"]:focus-visible {
+        color: var(--pulse-accent-text) !important;
+        background: var(--pulse-hover) !important;
+        border-color: var(--pulse-accent) !important;
+    }
+    @supports not (backdrop-filter: blur(1px)) {
+        .pulse-workflow,
+        .st-key-data_intake,
+        .st-key-risk_filters,
+        .st-key-portfolio_filters,
+        .st-key-portfolio_insights,
+        .st-key-report_context,
+        .st-key-report_delivery,
+        .pulse-inspector,
+        .st-key-activity_center,
+        .st-key-theme_switcher,
+        .st-key-mobile_navigation {
+            background: var(--pulse-surface);
+        }
     }
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p {
@@ -635,6 +744,68 @@ __SYSTEM_THEME__
     .st-key-mobile_navigation {
         display: none;
     }
+    .pulse-skeleton {
+        min-height: 5.5rem;
+        border: 1px solid var(--pulse-border);
+        border-radius: var(--pulse-radius-lg);
+        background: linear-gradient(100deg, var(--pulse-surface) 30%, var(--pulse-hover) 45%, var(--pulse-surface) 60%);
+        background-size: 240% 100%;
+        animation: pulse-skeleton-shimmer 1.4s ease-in-out infinite;
+    }
+    .pulse-inspector {
+        min-width: 0;
+        padding: var(--pulse-space-4);
+        border: 1px solid var(--pulse-border-strong);
+        border-radius: var(--pulse-radius-lg);
+        background: var(--pulse-glass);
+        backdrop-filter: blur(14px) saturate(120%);
+        -webkit-backdrop-filter: blur(14px) saturate(120%);
+        box-shadow: var(--pulse-shadow-sm);
+    }
+    .pulse-inspector h3 {
+        margin: 0 0 0.25rem;
+        font-size: 1rem;
+    }
+    .pulse-inspector-meta {
+        color: var(--pulse-muted);
+        font-size: 0.84rem;
+    }
+    .pulse-inspector dl {
+        display: grid;
+        grid-template-columns: minmax(7rem, 0.75fr) minmax(0, 1.25fr);
+        gap: 0.45rem 0.8rem;
+        margin: 0.9rem 0 0;
+    }
+    .pulse-inspector dt {
+        color: var(--pulse-muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .pulse-inspector dd {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+        color: var(--pulse-text);
+        font-size: 0.86rem;
+    }
+    .pulse-activity {
+        padding: 0.65rem 0.8rem;
+        border: 1px solid var(--pulse-border);
+        border-radius: var(--pulse-radius-md);
+        background: var(--pulse-surface-raised);
+    }
+    .pulse-activity strong { color: var(--pulse-heading); }
+    .pulse-activity span { color: var(--pulse-muted); font-size: 0.83rem; }
+    .st-key-activity_center {
+        margin-bottom: var(--pulse-space-4);
+        border: 1px solid var(--pulse-border);
+        border-radius: var(--pulse-radius-md);
+        background: var(--pulse-surface);
+    }
+    @keyframes pulse-skeleton-shimmer {
+        from { background-position: 100% 0; }
+        to { background-position: -100% 0; }
+    }
     .st-key-theme_switcher {
         position: fixed;
         z-index: 999998;
@@ -674,6 +845,16 @@ __SYSTEM_THEME__
         .pulse-workflow ol {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+        .st-key-report_context,
+        .st-key-portfolio_insights {
+            min-width: 0;
+        }
+    }
+    @media (min-width: 1024px) and (max-width: 1199px) {
+        .pulse-workflow ol {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .pulse-workflow li { min-width: 0; }
     }
     @media (max-width: 767.98px) {
         [data-testid="stSidebar"],
@@ -685,7 +866,7 @@ __SYSTEM_THEME__
             display: none;
         }
         .main .block-container, [data-testid="stMainBlockContainer"] {
-            padding: var(--pulse-space-3) var(--pulse-space-3) 6.8rem;
+            padding: var(--pulse-space-3) var(--pulse-space-3) calc(8rem + env(safe-area-inset-bottom));
         }
         .pulse-hero {
             border-radius: 14px;
@@ -730,6 +911,12 @@ __SYSTEM_THEME__
         .pulse-workflow li {
             min-height: 78px;
         }
+        .pulse-inspector {
+            padding: var(--pulse-space-3);
+        }
+        .pulse-inspector dl {
+            grid-template-columns: minmax(6.25rem, 0.8fr) minmax(0, 1.2fr);
+        }
         .st-key-data_intake,
         .st-key-risk_filters,
         .st-key-portfolio_filters,
@@ -751,7 +938,8 @@ __SYSTEM_THEME__
             padding: 0.42rem;
             border: 1px solid var(--pulse-border);
             border-radius: var(--pulse-radius-xl);
-            background: var(--pulse-overlay);
+            background: var(--pulse-surface-raised) !important;
+            isolation: isolate;
             box-shadow: var(--pulse-shadow-float);
             backdrop-filter: blur(14px);
         }
@@ -818,6 +1006,9 @@ __SYSTEM_THEME__
             scroll-behavior: auto !important;
             transition-duration: 0.01ms !important;
         }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .pulse-skeleton { animation: none; }
     }
 </style>
 """
@@ -1003,6 +1194,106 @@ def render_workflow_steps(title: str, summary: str, stages: tuple[tuple[str, str
     )
 
 
+def render_skeleton(label: str = "Loading evidence", *, target: Any = None) -> None:
+    """Render a non-interactive loading placeholder with an accessible label."""
+
+    renderer = target if target is not None else st
+    renderer.markdown(
+        f'<div class="pulse-skeleton" role="status" aria-label="{escape(label, quote=True)}"></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_job_progress(progress: JobProgress) -> None:
+    """Render truthful progress copy for local or production-backed work."""
+
+    percent = max(0, min(100, int(progress.percent)))
+    state_label = progress.state.value.replace("_", " ").title()
+    detail = progress.error or f"{progress.phase} · {percent}% · {state_label}"
+    st.markdown(
+        f'<div class="pulse-activity" role="status" aria-live="polite">'
+        f"<strong>{escape(progress.job_id)}</strong><br><span>{escape(detail)}</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_evidence_inspector(
+    title: str,
+    dataframe: pd.DataFrame,
+    *,
+    key: str,
+    id_column: str,
+    label_columns: tuple[str, ...] = (),
+    detail_columns: tuple[str, ...] = (),
+    page_size: int = 250,
+) -> InspectorState:
+    """Render a responsive selectable evidence inspector and return its state."""
+
+    total_count = len(dataframe)
+    if dataframe.empty or id_column not in dataframe.columns:
+        st.info("No evidence is available for this selection.")
+        return InspectorState(title, 0, total_count, None)
+
+    if page_size < 1:
+        raise ValueError("Evidence inspector page_size must be positive.")
+    source_rows = dataframe.reset_index(drop=True)
+    page_count = (total_count + page_size - 1) // page_size
+    rows = source_rows.iloc[:page_size]
+    identifiers = rows[id_column].astype(str).tolist()
+    label_columns = tuple(column for column in label_columns if column in source_rows.columns)
+    detail_columns = tuple(column for column in detail_columns if column in source_rows.columns)
+
+    def option_label(identifier: str) -> str:
+        match = rows.loc[rows[id_column].astype(str).eq(identifier)].iloc[0]
+        context = " · ".join(str(match[column]) for column in label_columns if pd.notna(match[column]))
+        return f"{identifier}{f' · {context}' if context else ''}"
+
+    selector_column, detail_column = st.columns([0.9, 1.1])
+    with selector_column:
+        page_number = 1
+        if page_count > 1:
+            page_number = st.selectbox(
+                f"{title} page",
+                range(1, page_count + 1),
+                format_func=lambda value: f"Page {value} of {page_count}",
+                key=f"{key}_page",
+            )
+        rows = source_rows.iloc[(page_number - 1) * page_size : page_number * page_size]
+        identifiers = rows[id_column].astype(str).tolist()
+        selected = st.selectbox(
+            f"{title} item",
+            identifiers,
+            format_func=option_label,
+            key=f"{key}_selection",
+            help="Select an item to inspect its complete source evidence.",
+        )
+    selected_row = rows.loc[rows[id_column].astype(str).eq(str(selected))].iloc[0]
+    status = str(selected_row.get("risk_level", selected_row.get("status", "Review")))
+    summary = str(selected_row.get("anomaly_notes", selected_row.get("summary", "Selected evidence")))
+    detail_pairs: list[tuple[str, str]] = [(id_column.replace("_", " ").title(), str(selected))]
+    for column in detail_columns:
+        value = selected_row[column]
+        if pd.isna(value):
+            rendered = "Not available"
+        elif isinstance(value, float):
+            rendered = f"{value:,.2f}"
+        else:
+            rendered = str(value)
+        detail_pairs.append((column.replace("_", " ").title(), rendered))
+    item = EvidenceItem(str(selected), option_label(str(selected)), status, summary, tuple(detail_pairs))
+    with detail_column:
+        st.markdown(
+            '<section class="pulse-inspector" aria-live="polite">'
+            f"<h3>{escape(title)}</h3>"
+            f'<div class="pulse-inspector-meta">{escape(item.status)} · {escape(item.summary)}</div>'
+            "<dl>"
+            + "".join(f"<dt>{escape(label)}</dt><dd>{escape(value)}</dd>" for label, value in item.fields)
+            + "</dl></section>",
+            unsafe_allow_html=True,
+        )
+    return InspectorState(title, total_count, total_count, item.identifier)
+
+
 def metric_value(label: str, value: str | int | float | None, help_text: str | None = None) -> None:
     st.metric(label, value, help=help_text)
 
@@ -1058,12 +1349,37 @@ def render_dataset_assessment(assessment: DatasetAssessment) -> None:
             st.info(message)
 
 
-def render_chart_data_table(title: str, dataframe: pd.DataFrame) -> None:
-    """Provide a keyboard-operable semantic table alternative for one chart."""
+def render_chart_data_table(
+    title: str,
+    dataframe: pd.DataFrame,
+    *,
+    view_model: ChartViewModel | None = None,
+) -> None:
+    """Provide narrative, semantic-table, and safe-export parity for one chart."""
 
-    st.caption(f"Chart: {title}. The exact values are available in the data table below.")
-    with st.expander(f"Data table: {title}"):
-        render_semantic_table(f"Data for {title}", dataframe)
+    chart = view_model or ChartViewModel(
+        title=title,
+        narrative="The exact values are available in the accessible table below.",
+        table_caption=f"Data for {title}",
+        export_name=_chart_export_name(title),
+    )
+    st.caption(f"Chart: {chart.title}. {chart.narrative}")
+    with st.expander(f"Data table: {chart.title}"):
+        render_semantic_table(chart.table_caption, dataframe)
+        st.download_button(
+            f"Download {chart.title} data",
+            data=safe_csv_bytes(dataframe, privacy_policy=DEMO_PRIVACY_POLICY),
+            file_name=chart.export_name,
+            mime="text/csv",
+            key=f"chart_export_{chart.export_name}",
+        )
+
+
+def _chart_export_name(title: str) -> str:
+    """Create a filesystem-safe export name from user-facing chart copy."""
+
+    slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_") or "chart"
+    return f"{slug}.csv"
 
 
 def render_semantic_table(caption: str, dataframe: pd.DataFrame) -> None:

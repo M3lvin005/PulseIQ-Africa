@@ -7,6 +7,7 @@ from io import BytesIO
 import pandas as pd
 
 from pulseiq.exports import safe_csv_bytes
+from pulseiq.privacy import DEMO_PRIVACY_POLICY
 
 
 def test_safe_csv_neutralizes_formula_like_user_strings() -> None:
@@ -44,3 +45,20 @@ def test_safe_csv_includes_utf8_bom_for_spreadsheet_interoperability() -> None:
     exported = safe_csv_bytes(pd.DataFrame({"city": ["Kigali"]}))
 
     assert exported.startswith(b"\xef\xbb\xbf")
+
+
+def test_safe_csv_can_minimize_sensitive_columns_and_values() -> None:
+    dataframe = pd.DataFrame(
+        {
+            "customer_id": ["CUST-1"],
+            "email": ["person@example.com"],
+            "notes": ["Contact +234 801 234 5678"],
+        }
+    )
+
+    exported = safe_csv_bytes(dataframe, privacy_policy=DEMO_PRIVACY_POLICY)
+    restored = pd.read_csv(BytesIO(exported), keep_default_na=False)
+
+    assert list(restored.columns) == ["customer_id", "notes"]
+    assert restored.loc[0, "notes"] == "[REDACTED]"
+    assert dataframe.loc[0, "email"] == "person@example.com"

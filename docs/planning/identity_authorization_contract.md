@@ -2,16 +2,19 @@
 
 ## Boundary decision
 
-PulseIQ does not implement passwords, password reset, OAuth callbacks, JWT signing, or refresh-token storage. A managed OIDC provider authenticates the actor; a server adapter verifies the provider response and creates a short-lived `AuthenticatedActor`. PulseIQ remains authoritative for organization/workspace membership, role, permission, revocation, and audit evidence.
+PulseIQ does not implement passwords, password reset, JWT signing, or refresh-token storage. A managed OIDC provider authenticates the actor; a provider adapter must exchange the authorization code and cryptographically verify the provider response. The framework-neutral orchestration seam now owns one-time callback state, nonce, PKCE, replay consumption, verified-claim revalidation, internal subject mapping, short-lived server-session creation, and authentication-event evidence. PulseIQ remains authoritative for organization/workspace membership, role, permission, revocation, and audit evidence.
 
-This follows proposed ADR-007 while keeping the provider replaceable. The current package includes domain scaffolding, deterministic in-memory adapters, and a locally verified PostgreSQL/RLS adapter. It is not a deployed authentication system.
+This follows proposed ADR-007 while keeping the provider replaceable. The current package includes domain scaffolding, deterministic OIDC/web adapters, and a locally verified PostgreSQL/RLS adapter. It is not a deployed authentication system and does not contain a real provider client/JWKS verifier.
 
 ## Trust flow
 
 ```text
 managed OIDC + MFA
-  -> server verifies issuer, audience, signature, nonce/state, time and session
-  -> provider adapter creates AuthenticatedActor (subject, session, expiry, AMR)
+  -> server creates one-time state + nonce + PKCE S256 transaction
+  -> provider adapter exchanges the code and verifies signature, issuer, audience, nonce and time
+  -> orchestration revalidates claims, consumes replay state and resolves a pre-provisioned subject link
+  -> server atomically creates the short-lived session + PII-free authentication event
+  -> secure-cookie adapter creates AuthenticatedActor evidence (actor, session, expiry, AMR)
   -> API loads the current server-side session and target resource ownership
   -> API constructs a server-resolved ResourceScope
   -> AuthorizationService loads current exact organization/workspace membership
@@ -72,7 +75,18 @@ The provider adapter is responsible for proving that `verified_email` came from 
 - Missing, expired, revoked, or actor-mismatched registry entries all fail closed as `session_inactive` before membership lookup.
 - Logout uses optimistic revision checks to revoke the current session and append audit evidence atomically. Revocation takes effect on the next authorization check even if the browser credential has not expired.
 - Revocation replay is rejected and cannot create duplicate evidence.
-- The current seam covers validation and self-logout. Secure cookie issuance/rotation, CSRF enforcement, global logout, provider logout, and anomaly-driven revocation remain adapter work.
+- The web seam now issues and rotates HMAC-authenticated `__Host-pulseiq_session` tickets with `Secure`, `HttpOnly`, `SameSite=Strict`, bounded `Max-Age`, key IDs, and a 30-minute maximum lifetime. A `BrowserRequestAuthenticator` validates the ticket and then requires the exact actor/session pair in the authoritative server registry.
+- Mutations require an exact configured origin, same-origin Fetch Metadata when supplied, and a session-bound CSRF synchronizer token delivered outside the HttpOnly cookie. Lookalike origins, duplicate cookies, malformed/tampered tickets, weak/reused keys, unknown key IDs, missing registry rows, expiry, and revocation fail closed with stable non-sensitive codes.
+- Key rotation accepts explicitly configured prior verification keys while issuing only with the active key. Logout still revokes the authoritative session first and returns a host-only cookie expiration header. OIDC verification, API middleware composition, global/provider logout, and anomaly-driven revocation remain adapter/deployment work.
+
+## OIDC login invariants
+
+- Login start persists only a SHA-256 state digest; the raw state is returned once in the authorization redirect. Nonce and PKCE verifier remain hidden server-side and are excluded from object representations.
+- Authorization uses code flow plus PKCE S256. Transactions expire after 5–15 minutes and transition once from pending to consumed or failed; unknown, expired, failed, and replayed state return the same generic response.
+- The provider adapter port must perform token exchange and cryptographic JWT/JWKS validation. Orchestration independently requires the exact configured issuer, client audience, constant-time nonce equality, current token/authentication time, and MFA when policy requires it.
+- Provider subjects never self-provision. Exact issuer/subject links resolve to internal UUID actors; absent or invalid mappings fail closed.
+- Successful callback atomically consumes the transaction, creates the authoritative session, and appends a PII-free authentication event. Failed verification consumes the transaction and records only a safe reason code—never code, token, nonce, verifier, email, IP, or provider claims.
+- Session expiry is the earlier of the 30-minute local limit and the verified identity-token expiry. Authorization still checks the current server registry and workspace membership on every request.
 
 ## Audit evidence
 
@@ -95,7 +109,7 @@ Tests cover the exact role matrix, cross-workspace denial, authoritative session
 
 ## Remaining production work
 
-1. OIDC provider adapter, verified-claim mapping, CSRF-protected secure-cookie session issuance/rotation, provider logout, global revocation, and assurance mapping;
+1. managed OIDC provider adapter for code exchange/JWKS signature validation, API middleware composition with the implemented OIDC and secure-cookie/CSRF services, provider logout, global revocation, and production assurance mapping;
 2. invitation delivery adapter, resend/revoke administration, enumeration/rate-limit controls, and provider-subject binding policy;
 3. organization/workspace creation and policy lifecycle;
 4. deploy and operate the PostgreSQL migration with non-bypass roles, TLS/secrets, backups/PITR, restore drills, migration controls, and production-cardinality plans;

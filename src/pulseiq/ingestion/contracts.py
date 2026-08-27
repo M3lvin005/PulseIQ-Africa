@@ -22,6 +22,7 @@ class UploadErrorCode(StrEnum):
     TOO_MANY_COLUMNS = "too_many_columns"
     EMPTY_HEADER = "empty_header"
     HEADER_COLLISION = "header_collision"
+    RESTRICTED_DATA = "restricted_data"
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,32 @@ def test_theme_css_resolves_manual_modes_without_placeholders(mode: str, scheme:
     assert "prefers-color-scheme: dark" not in css
 
 
+def test_theme_css_styles_react_controls_and_glass_surfaces() -> None:
+    """The semantic sheet must cover Streamlit's current controls, not only legacy selectors."""
+
+    css = ui.theme_css("Dark")
+
+    assert "--pulse-glass:" in css
+    assert ".react-aria-ComboBox" in css
+    assert '[data-testid="stMetricLabel"] p' in css
+    assert '.st-key-theme_switcher button[data-variant="segmented_control"]' in css
+
+
+def test_theme_css_reserves_mobile_dock_and_reflows_workflow_cards() -> None:
+    css = ui.theme_css("Dark")
+
+    assert "calc(8rem + env(safe-area-inset-bottom))" in css
+    assert "@media (min-width: 1024px) and (max-width: 1199px)" in css
+    assert ".pulse-inspector" in css
+
+
+def test_chart_export_names_are_safe_for_rule_titles() -> None:
+    assert (
+        ui._chart_export_name("Rule priority (prototype-risk-rules/2.0.0)")
+        == "rule_priority_prototype_risk_rules_2_0_0.csv"
+    )
+
+
 def test_theme_css_follows_system_preference_without_losing_light_default() -> None:
     css = ui.theme_css("System")
 

@@ -72,3 +72,14 @@ The category mapping follows the [OWASP Top 10:2021](https://owasp.org/Top10/). 
 - Secret finding: CI fails. Treat the value as compromised, revoke/rotate it, purge where legally and operationally appropriate, then add only a narrowly justified allowlist marker for demonstrably synthetic fixtures.
 
 Re-run this audit after any authentication, persistence, connector, webhook, external model, artifact upload/load, deployment, or multi-tenant change.
+
+## 2026-08-27 implementation addendum
+
+The production decision remains unchanged: the repository is not approved for internet-facing real-data use. The following controls now reduce implementation risk but are not deployed-control evidence:
+
+- **SEC-001/A07:** added one-time OIDC state/nonce, PKCE S256, replay consumption, exact issuer/audience/nonce/time/MFA checks, pre-provisioned subject mapping, atomic session/auth-event creation, signed bounded `__Host-` cookies, independent CSRF keys, exact-origin mutation checks, authoritative session lookup, duplicate/tamper/expiry rejection, logout expiration, and verification-key rotation. Managed-provider code exchange/JWKS cryptographic verification and API composition remain open.
+- **SEC-004/A04:** added named sliding-window policies for login IP, failed-login account, OIDC callback, upload, Assistant, report, and export scopes. Subjects and request IDs are HMAC-derived before storage; the Redis Lua adapter is atomic and the service fails closed when the store is unavailable. Deployment, tenant quotas, and worker resource isolation remain open.
+- **SEC-005/A05:** added strict nonce-based CSP, HSTS, no-store, frame/content/referrer/permissions policies, exact allowlisted credentialed CORS, and an executable production configuration gate. Edge integration, IaC, secret-manager operation, hardened workloads, signing, and restore evidence remain open.
+- **SEC-008/A02:** demo intake now rejects restricted identifier columns and high-confidence email/phone/IBAN patterns without recording matched values. CSV export minimization drops restricted columns and redacts detected textual cells. Source-system de-identification, DLP, DPIA, residency, rights, retention, and deletion remain open.
+
+Regression tests cover the new OIDC, privacy, browser-session, CSRF/origin, CORS/CSP, rate-limit, Redis-adapter, and configuration-gate contracts at 96.57% combined focused branch coverage. The 2026-08-27 rerun reported 392 passing tests with 23 expected service-environment skips, no Bandit findings, no known dependency vulnerabilities, and no secret-scan findings. Re-run the automated audit and an authorized deployed penetration test when the production API and infrastructure exist.
